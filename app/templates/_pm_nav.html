@@ -1,0 +1,9 @@
+{% set p = request.url.path %}
+<div class="tabs">
+  <a href="/pm" class="{{ 'active' if p == '/pm' }}">📋 ต้อง PM</a>
+  <a href="/pm/calendar" class="{{ 'active' if p.startswith('/pm/calendar') }}">📅 ปฏิทิน PM</a>
+  <a href="/pm/plan" class="{{ 'active' if p.startswith('/pm/plan') }}">🗓 แผน PM ประจำปี</a>
+  {% if allowed('pm_strokes') %}<a href="/pm/strokes" class="{{ 'active' if p.startswith('/pm/strokes') }}">🔢 บันทึก Stroke</a>{% endif %}
+  <a href="/pm/templates" class="{{ 'active' if p.startswith('/pm/templates') }}">✅ Checklist PM</a>
+  <a href="/pm/suggest" class="{{ 'active' if p.startswith('/pm/suggest') }}">💡 แนะนำรอบ PM</a>
+</div>

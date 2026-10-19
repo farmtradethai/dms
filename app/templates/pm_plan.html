@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block pagetitle %}แผน PM ประจำปี {{ year }}{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+{% set TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'] %}
+<div class="card tight">
+  <form class="row" data-autosubmit style="gap:8px">
+    <a class="btn sm sec" href="?year={{ year-1 }}&line={{ line }}&customer={{ customer }}">‹ {{ year-1 }}</a>
+    <b style="font-size:1.1rem">ปี {{ year }}</b><input type="hidden" name="year" value="{{ year }}">
+    <a class="btn sm sec" href="?year={{ year+1 }}&line={{ line }}&customer={{ customer }}">{{ year+1 }} ›</a>
+    <select name="line" style="width:auto"><option value="">ทุก Line</option>{% for l in lines %}<option {{ 'selected' if line==l }}>{{ l }}</option>{% endfor %}</select>
+    <select name="customer" style="width:auto"><option value="">ทุกลูกค้า</option>{% for c in customers %}<option {{ 'selected' if customer==c }}>{{ c }}</option>{% endfor %}</select>
+    <span class="muted">{{ plan.rows|length }} แม่พิมพ์ · แผน {{ plan.planned }} ครั้ง · ทำจริง {{ plan.actual }} ครั้ง{% if plan.late_months %} · <b style="color:var(--red)">ค้าง {{ plan.late_months }} เดือน-แม่พิมพ์</b>{% endif %}</span>
+    <span style="flex:1"></span>
+    <a class="btn sm" href="/pm/plan?year={{ year }}&line={{ line }}&customer={{ customer }}&fmt=xlsx">⬇ Excel (แบบฟอร์มแผนประจำปี)</a>
+    <button type="button" class="btn sm sec" onclick="window.print()">🖨 พิมพ์</button>
+  </form>
+</div>
+<div class="card tight">
+  <div class="row" style="gap:14px;font-size:.8rem;margin-bottom:6px"><span><span class="pl p">P</span> แผน</span><span><span class="pl a">A</span> ทำจริง</span><span><span class="pl late">P</span> ถึงแผนแล้วยังไม่ทำ</span><span><span class="pl lateA">A</span> ทำช้ากว่าแผน</span><span>⏭ = มีการเลื่อน</span><span class="muted">ตัวเลข = วันที่</span></div>
+  <div class="tbl-wrap" style="max-height:72vh;overflow:auto"><table class="tbl plan">
+    <thead><tr><th class="sticky">แม่พิมพ์</th><th>Line</th><th>รอบ</th>{% for mname in TH %}<th class="{{ 'curm' if year == today.year and loop.index == today.month }}">{{ mname }}</th>{% endfor %}<th>P/A</th></tr></thead>
+    <tbody>
+    {% for r in plan.rows %}{% set d = r.die %}
+      <tr><td class="sticky"><a href="/dies/{{ d.id }}#pm"><b>{{ d.part_no }}</b></a><br><small class="muted">{{ d.die_process }}</small></td>
+        <td><small>{{ d.line or '-' }}</small></td>
+        <td><small>{{ (d.pm_interval_days ~ 'ว') if d.pm_interval_days }}{{ ' / ' if d.pm_interval_days and d.pm_interval_strokes }}{{ ('{:,}'.format(d.pm_interval_strokes) ~ 'st') if d.pm_interval_strokes }}</small></td>
+        {% for mo in r.months %}<td class="{{ 'curm' if year == today.year and loop.index == today.month }}">
+          {% for x in mo.p %}<span class="pl {{ 'late' if mo.late else 'p' }}" title="แผน {{ x|d }}">{{ x.day }}</span>{% endfor %}
+          {% for a in mo.a %}<a class="pl {{ 'lateA' if a.late else 'a' }}" href="/requests/{{ a.id }}" title="{{ a.dr }} ทำ {{ a.date|d }}">{{ a.date.day }}</a>{% endfor %}
+          {% if mo.post %}<span title="{% for e in mo.post %}{{ e.from_date|d }}→{{ e.to_date|d }} {{ e.reason }} {% endfor %}">⏭</span>{% endif %}
+        </td>{% endfor %}
+        <td class="num"><small>{{ r.planned }}/{{ r.actual }}</small></td></tr>
+    {% else %}<tr><td colspan="16" class="muted">ยังไม่มีแม่พิมพ์ที่ตั้งแผน PM — ตั้งได้ที่หน้าแม่พิมพ์ หรือ <a href="/pm/suggest">ใช้รอบที่ระบบแนะนำ</a></td></tr>{% endfor %}
+    </tbody></table></div>
+  <p class="help">แผนในอดีต = วันที่กำหนดของใบงาน PM จริง · แผนในอนาคต = คาดการณ์จากรอบ PM (วัน) · แม่พิมพ์ PM ตาม Stroke อย่างเดียวจะมีแค่ "A"</p>
+</div>
+<style>
+.tbl.plan td, .tbl.plan th { text-align:center; padding:5px 4px; white-space:nowrap; }
+.tbl.plan .sticky { position:sticky; left:0; background:var(--card); text-align:left; z-index:1; min-width:170px; }
+.tbl.plan thead th { position:sticky; top:0; background:var(--card); z-index:2; }
+.tbl.plan .curm { background:var(--blue-bg); }
+.pl { display:inline-block; min-width:22px; padding:1px 4px; margin:1px; border-radius:5px; font-size:.72rem; font-weight:700; }
+.pl.p { background:var(--blue-bg); color:var(--blue); border:1px solid var(--blue); }
+.pl.a { background:var(--green); color:#fff; } .pl.lateA { background:var(--amber); color:#fff; }
+.pl.late { background:var(--red-bg); color:var(--red); border:1px solid var(--red); }
+a.pl:hover { text-decoration:none; filter:brightness(1.1); }
+@media print { .tbl-wrap { max-height:none !important; overflow:visible !important; } }
+</style>
+{% endblock %}

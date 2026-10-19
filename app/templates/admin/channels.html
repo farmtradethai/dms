@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block pagetitle %}ช่องทางแจ้งเตือน{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="card" style="border-left:5px solid var(--accent)">
+  <div class="row between"><h3 style="margin:0">📧 อีเมลถึงผู้อนุมัติรายบุคคล (ทุกขั้นตอน)</h3>
+    <span class="pill {{ 'green' if pe.enabled else 'red' }}">{{ 'เปิดใช้งาน' if pe.enabled else 'ยังไม่พร้อมส่ง' }}</span></div>
+  <p class="muted" style="margin:6px 0 10px">ทุกครั้งที่สถานะเปลี่ยน ระบบส่งอีเมลเฉพาะ <b>คนที่ต้องดำเนินการขั้นถัดไป</b> (Foreman/QC ของ Line นั้น, หัวหน้า Die, ช่างที่ถูกมอบหมาย, ผู้แจ้งเมื่อต้อง Try-out) พร้อมปุ่มเปิดใบงาน —
+  ลิงก์ต้อง login และเปิดได้เฉพาะผู้มีสิทธิ์ ส่วนในแอปทุกคนที่เกี่ยวข้องได้แจ้งเตือนที่กระดิ่ง · ใช้ Brevo (ฟรี 300 ฉบับ/วัน)</p>
+  <form method="post" action="/admin/channels/personal-email" class="grid g2" style="align-items:end">
+    <div class="field"><label>Brevo API key</label><input name="api_key" value="{{ '••••••••' + s.brevo_api_key[-4:] if s.brevo_api_key else '' }}" placeholder="xkeysib-…{{ ' (ว่าง = ใช้ key จากช่องทางอีเมลด้านล่าง)' }}"></div>
+    <div class="field"><label>อีเมลผู้ส่ง (verified ใน Brevo)</label><input name="sender_email" value="{{ s.brevo_sender_email or '' }}" placeholder="die-system@aapico.com"></div>
+    <div class="field"><label>ชื่อผู้ส่ง</label><input name="sender_name" value="{{ s.brevo_sender_name or '' }}" placeholder="Die Management {{ company.code }}"></div>
+    <div class="field"><label>ส่งทดสอบไปที่ (ไม่บังคับ)</label><input name="test_to" value="{{ user.email or '' }}" placeholder="your@email.com"></div>
+    <div class="field"><label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if s.get('personal_email', True) }}> เปิดส่งอีเมลรายบุคคล</label></div>
+    <div class="field"><button class="btn">💾 บันทึก / ทดสอบ</button></div>
+  </form>
+  {% if no_email %}<div class="alert warn" style="margin-top:6px"><b>{{ no_email|length }} จาก {{ n_approvers }} คนยังไม่มีอีเมล</b> — จะได้แจ้งเตือนเฉพาะในแอป:
+    {% for u in no_email[:30] %}<span class="tag">{{ u.full_name }} · {{ t('role_' ~ u.role) }}</span> {% endfor %}{% if no_email|length > 30 %}…{% endif %}
+    <a href="/admin/users">เพิ่มอีเมลที่หน้าผู้ใช้ / นำเข้า Excel</a></div>{% endif %}
+  {% if shared %}<div class="alert info" style="margin-top:6px"><b>อีเมลที่หลายคนใช้ร่วมกัน</b> (เช่นอีเมลกลางแผนก) — ระบบส่งฉบับเดียวต่ออีเมล:
+    {% for e, names in shared.items() %}<div><code>{{ e }}</code> ← {{ names|join(', ') }}</div>{% endfor %}</div>{% endif %}
+</div>
+{% set fields = {
+ 'line': [('channel_access_token','Channel access token (LINE Messaging API)'),('to','User ID / Group ID ที่จะส่งหา')],
+ 'telegram': [('bot_token','Bot token'),('chat_id','Chat ID (กลุ่มหรือคน)')],
+ 'discord': [('webhook_url','Webhook URL')],
+ 'email': [('api_key','Brevo API key'),('sender_email','อีเมลผู้ส่ง (verified ใน Brevo)'),('sender_name','ชื่อผู้ส่ง'),('to','ผู้รับ (คั่นด้วย ,)')],
+ 'webhook': [('url','URL'),('secret','Secret (ส่งใน header X-DMS-Secret)')]
+} %}
+<div class="grid g2" style="align-items:start">
+<div class="card">
+  <h3 id="ctitle">➕ เพิ่มช่องทาง</h3>
+  <form method="post" action="/admin/channels" id="cform">
+    <input type="hidden" name="chid" id="chid" value="0">
+    <div class="grid g2">
+      <div class="field"><label>ชื่อ</label><input name="name" id="c_name" required placeholder="LINE กลุ่ม Die MT"></div>
+      <div class="field"><label>ประเภท</label><select name="type" id="c_type" onchange="renderCfg()"><option value="line">LINE (Messaging API) — ส่งรูปได้</option><option value="telegram">Telegram — ส่งรูป+ไฟล์ได้</option><option value="discord">Discord Webhook — ส่งรูป+ไฟล์ได้</option><option value="email">Email ผ่าน Brevo — แนบไฟล์ได้</option><option value="webhook">Webhook (JSON) — ต่อระบบอื่น</option></select></div>
+    </div>
+    <div id="cfg"></div>
+    <label>เหตุการณ์ที่ส่ง <small class="muted">(ไม่เลือก = ส่งทุกเหตุการณ์)</small></label>
+    <div class="row" style="margin-bottom:10px">{% for ev, (label, roles) in events.items() %}<label class="check" style="font-weight:500"><input type="checkbox" name="events" value="{{ ev }}" class="ev"> {{ label }}</label>{% endfor %}</div>
+    <label class="check"><input type="checkbox" name="is_active" value="1" id="c_active" checked> เปิดใช้งาน</label>
+    <div class="row" style="margin-top:12px"><button class="btn">{{ t('save') }}</button><button class="btn sec" name="test" value="1">💾 บันทึก & ส่งทดสอบ</button><button type="button" class="btn ghost" onclick="resetC()">ล้าง</button></div>
+  </form>
+  <div class="help" style="margin-top:10px">แนะนำ: LINE สำหรับหน้างาน, Telegram/Discord สำหรับหัวหน้า (ได้รูปและไฟล์ Excel), Brevo email สำหรับผู้บริหาร (ฟรี 300 ฉบับ/วัน)</div>
+</div>
+<div class="card tight">
+  {% for c in rows %}<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div><b>{{ c.name }}</b> <span class="pill blue">{{ c.type }}</span> {% if not c.is_active %}<span class="pill gray">ปิด</span>{% endif %}<br><small class="muted">{{ c.events|join(', ') if c.events else 'ทุกเหตุการณ์' }}</small></div>
+    <div class="row"><button class="btn sm sec" onclick='editC({{ tojson({"id":c.id,"name":c.name,"type":c.type,"config":c.config,"events":c.events,"is_active":c.is_active})|safe }})'>✏️</button>
+      <form method="post" action="/admin/channels"><input type="hidden" name="chid" value="{{ c.id }}"><input type="hidden" name="delete" value="1"><button class="btn sm ghost" data-confirm="ลบ?">🗑</button></form></div></div>
+  {% else %}<p class="muted">ยังไม่มีช่องทาง — ระบบยังแจ้งเตือนในแอป (กระดิ่ง) ให้ทุกบทบาทที่เกี่ยวข้องเสมอ</p>{% endfor %}
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const FIELDS = {{ tojson(fields)|safe }}; let cur = {};
+function renderCfg(){ const t=document.getElementById('c_type').value; document.getElementById('cfg').innerHTML = FIELDS[t].map(([k,l])=>`<div class="field"><label>${l}</label><input name="cfg_${k}" value="${(cur[k]||'').replace(/"/g,'&quot;')}"></div>`).join(''); }
+function editC(c){ cur=c.config||{}; document.getElementById('ctitle').textContent='✏️ '+c.name; document.getElementById('chid').value=c.id; document.getElementById('c_name').value=c.name; document.getElementById('c_type').value=c.type; document.getElementById('c_active').checked=c.is_active; document.querySelectorAll('.ev').forEach(e=>e.checked=(c.events||[]).includes(e.value)); renderCfg(); window.scrollTo({top:0,behavior:'smooth'}); }
+function resetC(){ cur={}; document.getElementById('chid').value=0; document.getElementById('c_name').value=''; document.querySelectorAll('.ev').forEach(e=>e.checked=false); renderCfg(); }
+renderCfg();
+</script>
+{% endblock %}

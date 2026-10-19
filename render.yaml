@@ -1,0 +1,35 @@
+# Render.com blueprint — Free web service + Neon/Supabase Postgres (external, free) + Cloudflare R2 for images (free 10 GB)
+services:
+  - type: web
+    name: die-management
+    runtime: python
+    plan: free
+    region: singapore        # closest Render region to Thailand
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false          # paste Neon / Supabase postgres URL
+      - key: BASE_URL
+        sync: false          # https://die-management.onrender.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TZ_OFFSET_HOURS
+        value: "7"
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: S3_REGION
+        value: auto            # Supabase Storage: put the project region, e.g. ap-southeast-1

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('notifications') }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="row between"><h3>🔔 {{ t('notifications') }}</h3>
+    <button class="btn sm sec" onclick="fetch('/notifications/read',{method:'POST',body:new FormData()}).then(()=>location.reload())">อ่านทั้งหมดแล้ว</button></div>
+  {% for n in items %}
+  <a href="{{ n.link }}" class="job" style="margin-bottom:8px;border-left-color:var(--{{ 'red' if n.level=='danger' else 'amber' if n.level=='warn' else 'green' if n.level=='success' else 'blue' }});{{ 'opacity:.6' if user.id in n.read_by }}">
+    <div><div class="dr">{{ n.title }}</div><div class="meta" style="white-space:pre-line">{{ n.body }}</div></div>
+    <div class="muted" style="font-size:.8rem">{{ n.at|dt }}</div>
+  </a>
+  {% else %}<p class="muted">ยังไม่มีการแจ้งเตือน</p>{% endfor %}
+</div>
+{% endblock %}

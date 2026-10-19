@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_admin') }}{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="grid g4">
+  <a href="/admin/users" class="kpi"><div class="v">{{ counts.users }}</div><div class="l">ผู้ใช้</div></a>
+  <a href="/dies" class="kpi teal"><div class="v">{{ counts.dies }}</div><div class="l">แม่พิมพ์ในทะเบียน</div></a>
+  <a href="/requests?view=all" class="kpi violet"><div class="v">{{ counts.requests }}</div><div class="l">ใบงานทั้งหมด</div></a>
+  <a href="/admin/storage" class="kpi {{ 'red' if stats.warn else 'green' }}"><div class="v">{{ stats.mb }} MB</div><div class="l">รูปภาพ {{ stats.count }} ไฟล์ ({{ stats.backend }})</div></a>
+</div>
+<div class="grid g2" style="margin-top:14px">
+  <div class="card"><h3>🚀 ความพร้อมใช้งานของ {{ company.code }} {% if ready.ready %}<span class="pill green">✅ พร้อม</span>{% else %}<span class="pill amber">ขาด {{ ready.req_total - ready.req_ok }} ข้อจำเป็น</span>{% endif %}</h3>
+    <div class="row between" style="margin-bottom:4px"><small>จำเป็น {{ ready.req_ok }}/{{ ready.req_total }} · แนะนำ {{ ready.rec_ok }}/{{ ready.rec_total }}</small><b>{{ ready.pct }}%</b></div>
+    <div class="meter"><i style="width:{{ ready.pct }}%"></i></div>
+    <ul class="check-list" style="margin-top:8px">
+    {% for i in ready['items'] if not i.ok %}{% if loop.index <= 6 %}<li><span class="ic">{{ '❌' if i.level=='req' else '⚠️' }}</span><div>{{ i.title }}<small>{{ i.detail }}</small></div><a class="btn sm sec" href="{{ i.fix }}">{{ i.fix_label }} →</a></li>{% endif %}
+    {% else %}<li><span class="ic">🎉</span><div>ครบทุกข้อ</div><span></span></li>{% endfor %}
+    </ul>
+    <div class="row" style="margin-top:10px"><a class="btn sm" href="/admin/setup">🚀 Template ข้อมูลตั้งต้น + ตรวจความพร้อมทั้งหมด</a><a class="btn sm sec" href="/admin/approvers">🧭 ผังผู้อนุมัติ</a></div>
+  </div>
+  <div class="card"><h3>💾 Backup ล่าสุด</h3>
+    {% for b in backups %}<div class="row between" style="padding:4px 0;border-bottom:1px solid var(--line)"><a href="/admin/backup/download/{{ b.name }}">{{ b.name }}</a><small class="muted">{{ b.mb }} MB · {{ b.at }}</small></div>{% else %}<p class="muted">ยังไม่มี — <a href="/admin/backup">สร้าง Backup</a></p>{% endfor %}
+    <hr><form method="post" action="/admin/run-checks"><button class="btn sec">▶ รันตรวจสอบงานเกินกำหนด / PM / พื้นที่ ตอนนี้</button> <small class="muted">(ปกติรันอัตโนมัติทุกชั่วโมง, แจ้งวันละครั้ง)</small></form>
+    <p class="muted" style="margin-top:10px">API สำหรับโปรแกรมอื่น: <code>/api/docs</code> (ใช้ X-API-Key จากหน้าตั้งค่า)</p></div>
+</div>
+{% endblock %}

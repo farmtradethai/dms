@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% set editing = req is not none %}
+{% block pagetitle %}{{ (t('edit') ~ ' ' ~ req.dr_no) if editing else t('menu_new_request') }}{% endblock %}
+{% block content %}
+<form method="post" action="{{ '/requests/' ~ req.id ~ '/edit' if editing else '/requests/new' }}" enctype="multipart/form-data" id="reqform" class="grid g2" style="align-items:start">
+<div class="card">
+  <h3>1. {{ t('request_type') }} & Die</h3>
+  <div class="grid g2">
+    <div class="field"><label>{{ t('request_type') }} <span class="req">*</span></label>
+      <select name="request_type" {{ 'disabled' if editing }}>
+        {% for ty in REQUEST_TYPES %}<option value="{{ ty }}" {{ 'selected' if (req.request_type if editing else rtype)==ty }}>{{ t('type_' ~ ty) }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label>{{ t('line') }} <span class="req">*</span></label>
+      <select name="line" required>
+        <option value="">-</option>
+        {% for l in m.lines %}<option value="{{ l }}" {{ 'selected' if (req.line if editing else (die.line if die else user.line))==l }}>{{ l }}</option>{% endfor %}
+      </select></div>
+  </div>
+  {% if not editing %}
+  <div class="field">
+    <label>🔍 ค้นหาแม่พิมพ์เร็ว (Part No / Part Name / Die Code) หรือสแกน QR</label>
+    <div class="row"><input id="dieq" placeholder="พิมพ์อย่างน้อย 3 ตัวอักษร…" autocomplete="off" style="flex:1"> <a href="/scan" class="btn sec">📷</a></div>
+    <div id="dieq-res" class="stack" style="margin-top:6px"></div>
+  </div>
+  <div class="grid g2">
+    <div class="field"><label>{{ t('customer') }}</label><select id="customer" name="customer"><option value="">-</option>{% for c in m.customers %}<option {{ 'selected' if die and die.customer==c }}>{{ c }}</option>{% endfor %}</select></div>
+    <div class="field"><label>{{ t('model') }}</label><select id="model" name="model"><option value="{{ die.model if die else '' }}">{{ die.model if die else '-' }}</option></select></div>
+    <div class="field"><label>{{ t('part_no') }} <span class="req">*</span></label><select id="part_no" name="part_no"><option value="{{ die.part_no if die else '' }}">{{ die.part_no if die else '-' }}</option></select></div>
+    <div class="field"><label>{{ t('die_process') }} <span class="req">*</span></label><select id="die_id" name="die_id"><option value="{{ die.id if die else '' }}" data-code="{{ die.die_code if die else '' }}">{{ die.die_process if die else '-' }}</option></select></div>
+  </div>
+  <input type="hidden" name="part_name" id="part_name" value="{{ die.part_name if die else '' }}">
+  <input type="hidden" name="die_process" id="die_process_txt" value="{{ die.die_process if die else '' }}">
+  <div class="row" style="margin:-4px 0 10px">
+    <span class="tag" id="part_name_show">{{ die.part_name if die else '' }}</span>
+    <span class="tag" id="die_code_show">{{ die.die_code if die else '' }}</span>
+  </div>
+  <details><summary class="muted" style="cursor:pointer">แม่พิมพ์ยังไม่อยู่ในทะเบียน? กรอกเองที่นี่</summary>
+    <div class="grid g2" style="margin-top:8px">
+      <div class="field"><label>Part No</label><input id="adhoc_part" placeholder="เช่น 44591-0K110"></div>
+      <div class="field"><label>Die Process</label><input id="adhoc_proc" placeholder="เช่น OP10 Progressive"></div>
+      <div class="field"><label>Part Name</label><input id="adhoc_name"></div>
+      <div class="field"><label>&nbsp;</label><button type="button" class="btn sec" onclick="useAdhoc()">ใช้ค่านี้</button></div>
+    </div></details>
+  {% else %}
+  <div class="grid g2">
+    <div class="field"><label>{{ t('customer') }}</label><input name="customer" value="{{ req.customer or '' }}"></div>
+    <div class="field"><label>{{ t('model') }}</label><input name="model" value="{{ req.model or '' }}"></div>
+    <div class="field"><label>{{ t('part_no') }}</label><input value="{{ req.part_no }}" disabled></div>
+    <div class="field"><label>{{ t('die_process') }}</label><input name="die_process" value="{{ req.die_process or '' }}"></div>
+    <div class="field" style="grid-column:1/-1"><label>{{ t('part_name') }}</label><input name="part_name" value="{{ req.part_name or '' }}"></div>
+  </div>
+  {% endif %}
+  <div class="field"><label>{{ t('machine') }}</label><input name="machine_no" value="{{ req.machine_no if editing else (die.machine_no if die else '') }}" placeholder="เช่น 500T-11"></div>
+</div>
+
+<div class="card">
+  <h3>2. {{ t('problem') }} & {{ t('priority') }}</h3>
+  <div class="field"><label>{{ t('problem') }} <span class="req">*</span></label>
+    <select name="problem_id" id="problem_id">
+      <option value="">- เลือกปัญหา -</option>
+      {% for p in m.problems %}<option value="{{ p.id }}" {{ 'selected' if editing and req.problem_id==p.id }}>{{ p.name_th }}{% if lang=='en' and p.name_en and p.name_en!=p.name_th %} / {{ p.name_en }}{% endif %}</option>{% endfor %}
+    </select>
+    <input name="problem_other" placeholder="ถ้าเลือก 'อื่นๆ' โปรดระบุปัญหา" style="margin-top:6px" value="{{ '' }}"></div>
+  <div class="field"><label>{{ t('other_details') }}</label><textarea name="other_details" placeholder="รายละเอียด / ตำแหน่งที่พบ / สิ่งที่ต้องการให้ทำ">{{ req.other_details if editing else '' }}</textarea></div>
+  <div class="grid g2">
+    <div class="field"><label>{{ t('required_day') }} <span class="req">*</span></label>
+      <select name="required_day">
+        {% for d in REQUIRED_DAYS %}<option value="{{ d }}" {{ 'selected' if (req.required_day if editing else '3')==d }}>{{ {'<1':'< 1 วัน (ด่วน)','3':'3 วัน','5':'5 วัน','>7':'> 7 วัน'}[d] }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label>{{ t('target_date') }}</label><input type="date" name="target_date" value="{{ req.target_date.isoformat() if editing and req.target_date else '' }}"><div class="help">เว้นว่าง = คำนวณจากจำนวนวันที่ต้องการ</div></div>
+    <div class="field"><label>{{ t('stock_oh') }}</label><input type="number" name="stock_oh" inputmode="numeric" value="{{ req.stock_oh if editing and req.stock_oh is not none else '' }}"></div>
+    <div class="field"><label>{{ t('phone') }}</label><input name="requester_phone" inputmode="tel" value="{{ req.requester_phone if editing else (user.phone or '') }}"></div>
+  </div>
+  <div class="row" style="margin-bottom:10px">
+    <label class="check"><input type="checkbox" name="sample_part" value="1" {{ 'checked' if editing and req.sample_part }}> {{ t('sample_part') }}</label>
+    <label class="check"><input type="checkbox" name="emergency" value="1" {{ 'checked' if editing and req.is_emergency }}> 🔥 {{ t('emergency') }}</label>
+  </div>
+  {% if editing and user.role in ('technician','die_leader','admin','superadmin','manager') %}
+  <hr><h3>ส่วนช่าง / Die MT</h3>
+  <div class="field"><label>{{ t('root_cause') }}</label><select name="root_cause_id"><option value="">-</option>{% for c in m.root_causes %}<option value="{{ c.id }}" {{ 'selected' if req.root_cause_id==c.id }}>{{ c.name_th }}</option>{% endfor %}</select></div>
+  <div class="field"><label>{{ t('action') }}</label><textarea name="action_text">{{ req.action_text or '' }}</textarea></div>
+  <div class="grid g2">
+    <div class="field"><label>{{ t('net_time') }} (นาที)</label><input type="number" name="net_repair_minutes" value="{{ req.net_repair_minutes or '' }}"></div>
+    <div class="field"><label>{{ t('downtime') }}</label><input type="number" name="downtime_minutes" value="{{ req.downtime_minutes or '' }}"></div>
+  </div>
+  {% endif %}
+  {% if not editing %}
+  <label class="photo-input"><input type="file" name="photos" accept="image/*" capture="environment" multiple>
+    📷 {{ t('add_photo') }} <span class="count muted"></span><div class="help">ถ่ายจากมือถือได้เลย ระบบย่อรูปอัตโนมัติ</div><div class="preview-strip"></div></label>
+  {% endif %}
+  <div style="margin-top:14px">
+    <button class="btn lg green" type="submit">{{ t('save') if editing else t('act_submit') }}</button>
+    {% if editing %}<a href="/requests/{{ req.id }}" class="btn ghost lg" style="margin-top:8px">{{ t('cancel') }}</a>{% endif %}
+  </div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+{% if not editing %}
+<script>
+const $ = s => document.querySelector(s);
+const api = p => fetch('/api/dies?' + new URLSearchParams(p)).then(r => r.json());
+function opt(sel, items, val, label) {
+  sel.innerHTML = '<option value="">-</option>' + items.map(i => `<option value="${val(i)}">${label(i)}</option>`).join('');
+}
+$('#customer').addEventListener('change', async e => {
+  const d = await api({customer: e.target.value});
+  opt($('#model'), d.models || [], m => m, m => m || '(no model)');
+  $('#part_no').innerHTML = '<option value="">-</option>'; $('#die_id').innerHTML = '<option value="">-</option>';
+});
+$('#model').addEventListener('change', async e => {
+  const d = await api({customer: $('#customer').value, model: e.target.value});
+  opt($('#part_no'), d.parts || [], p => p.part_no, p => `${p.part_no} — ${p.part_name || ''}`);
+  $('#die_id').innerHTML = '<option value="">-</option>';
+});
+$('#part_no').addEventListener('change', async e => {
+  const d = await api({customer: $('#customer').value, model: $('#model').value, part_no: e.target.value});
+  fillDies(d.dies || []);
+});
+function fillDies(dies) {
+  $('#die_id').innerHTML = '<option value="">- เลือก Process -</option>' + dies.map(d => `<option value="${d.id}" data-code="${d.die_code||''}" data-name="${d.part_name||''}" data-line="${d.line||''}" data-proc="${d.die_process}">${d.die_process}${d.die_code ? ' · ' + d.die_code : ''}</option>`).join('');
+  if (dies.length === 1) { $('#die_id').value = dies[0].id; $('#die_id').dispatchEvent(new Event('change')); }
+}
+$('#die_id').addEventListener('change', e => {
+  const o = e.target.selectedOptions[0]; if (!o) return;
+  $('#part_name').value = o.dataset.name || ''; $('#part_name_show').textContent = o.dataset.name || '';
+  $('#die_code_show').textContent = o.dataset.code || ''; $('#die_process_txt').value = o.dataset.proc || '';
+  if (o.dataset.line && !document.querySelector('[name=line]').value) document.querySelector('[name=line]').value = o.dataset.line;
+});
+let tmr; $('#dieq').addEventListener('input', e => {
+  clearTimeout(tmr); const q = e.target.value.trim(); if (q.length < 3) { $('#dieq-res').innerHTML = ''; return; }
+  tmr = setTimeout(async () => {
+    const d = await api({q});
+    $('#dieq-res').innerHTML = (d.dies || []).slice(0, 12).map(x => `<a href="#" class="job" data-die='${JSON.stringify(x).replace(/'/g,"&#39;")}' style="padding:8px 12px"><div><b>${x.part_no}</b> · ${x.die_process} <span class="tag">${x.customer||''}</span> <span class="tag">${x.line||''}</span><div class="meta">${x.part_name||''} ${x.die_code? '· '+x.die_code:''}</div></div></a>`).join('') || '<small class="muted">ไม่พบ</small>';
+  }, 250);
+});
+$('#dieq-res').addEventListener('click', e => {
+  const a = e.target.closest('a[data-die]'); if (!a) return; e.preventDefault();
+  const x = JSON.parse(a.dataset.die);
+  $('#customer').value = x.customer || ''; $('#model').innerHTML = `<option>${x.model||''}</option>`;
+  $('#part_no').innerHTML = `<option>${x.part_no}</option>`; fillDies([x]); $('#dieq-res').innerHTML = ''; $('#dieq').value = '';
+});
+function useAdhoc() {
+  const p = $('#adhoc_part').value.trim(), pr = $('#adhoc_proc').value.trim(); if (!p || !pr) return alert('กรอก Part No และ Die Process');
+  $('#part_no').innerHTML = `<option>${p}</option>`; $('#die_id').innerHTML = `<option value="">(ใหม่) ${pr}</option>`;
+  $('#die_process_txt').value = pr; $('#part_name').value = $('#adhoc_name').value; $('#part_name_show').textContent = $('#adhoc_name').value; $('#die_code_show').textContent = 'ใหม่';
+}
+document.getElementById('reqform').addEventListener('submit', e => {
+  if (!$('#part_no').value && !$('#adhoc_part').value) { e.preventDefault(); alert('กรุณาเลือกแม่พิมพ์ (Part No / Process)'); }
+  if (!$('#problem_id').value && !document.querySelector('[name=problem_other]').value) { e.preventDefault(); alert('กรุณาเลือกปัญหา'); }
+});
+{% if die %}$('#die_id').dispatchEvent(new Event('change'));{% endif %}
+</script>
+{% endif %}
+{% endblock %}

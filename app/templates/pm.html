@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_pm') }}{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+{% set lead = user.role in ('die_leader','admin','superadmin','manager') %}
+<div class="grid g6">
+  <a href="?show=due&horizon={{ horizon }}#pmlist" class="kpi red"><div class="v">{{ groups.overdue|length }}</div><div class="l">PM เกินกำหนด</div></a>
+  <a href="?show=due&horizon={{ horizon }}#pmlist" class="kpi amber"><div class="v">{{ groups.due|length }}</div><div class="l">ถึงกำหนดใน {{ horizon }} วัน</div></a>
+  <a href="/requests?view=open&rtype=PM" class="kpi blue"><div class="v">{{ open_pm|length }}</div><div class="l">ใบงาน PM เปิดอยู่</div></a>
+  <a href="/pm/plan" class="kpi green"><div class="v">{{ k.compliance if k.compliance is not none else '-' }}{% if k.compliance is not none %}%{% endif %}</div><div class="l">PM ตรงแผน เดือนนี้ ({{ k.on_time }}/{{ k.planned }})</div></a>
+  <a href="/analytics" class="kpi violet"><div class="v">{{ k12.pm_ratio if k12.pm_ratio is not none else '-' }}{% if k12.pm_ratio is not none %}%{% endif %}</div><div class="l">สัดส่วนงาน PM 12 เดือน (PM {{ k12.done }} : ซ่อม {{ k12.repairs }})</div></a>
+  <a href="/pm/suggest" class="kpi {{ 'red' if (k12.fail_after_pct or 0) > 20 else 'teal' }}"><div class="v">{{ k12.fail_after_pct if k12.fail_after_pct is not none else '-' }}{% if k12.fail_after_pct is not none %}%{% endif %}</div><div class="l">เสียซ้ำภายใน 30 วันหลัง PM ({{ k12.fail_after }} ครั้ง)</div></a>
+</div>
+
+{% if lead %}<div class="row" style="margin-top:10px;gap:8px;font-size:.85rem">
+  {% if company.settings.pm_auto_create_days %}<span class="pill green">⚙ เปิดใบงาน PM อัตโนมัติล่วงหน้า {{ company.settings.pm_auto_create_days }} วัน (ทุกเช้า)</span>
+    <form method="post" action="/pm/auto-run"><button class="btn sm sec">▶ รันตอนนี้</button></form>
+  {% else %}<span class="muted">เปิดใบงาน PM อัตโนมัติ: ปิดอยู่</span>{% if user.is_admin %} <a href="/admin/settings">ตั้งค่า →</a>{% endif %}{% endif %}
+</div>{% endif %}
+{% if n_dies and n_plan < n_dies * 0.3 %}
+<div class="alert info" style="margin-top:12px">มีแผน PM <b>{{ n_plan }}</b> จาก {{ n_dies }} แม่พิมพ์ ·
+  {% if n_sug %}ระบบพบ <b>{{ n_sug }}</b> แม่พิมพ์ที่เสียบ่อยและควรมีแผน PM — <a href="/pm/suggest">ดูรอบที่แนะนำ (คำนวณจาก MTBF) แล้วตั้งได้คลิกเดียว →</a>{% else %}ตั้งแผนได้ที่หน้าแม่พิมพ์แต่ละตัว หรือ Template ข้อมูลตั้งต้น (ชีต 8_Dies){% endif %}</div>{% endif %}
+
+<div class="card" style="margin-top:12px" id="pmlist">
+  <div class="row between" style="margin-bottom:8px">
+    <h3 style="margin:0">🛠️ แม่พิมพ์ที่ต้อง PM</h3>
+    <form class="row" data-autosubmit style="gap:6px">
+      <select name="show" style="width:auto"><option value="due" {{ 'selected' if show=='due' }}>เกินกำหนด + ถึงกำหนด</option><option value="upcoming" {{ 'selected' if show=='upcoming' }}>ยังไม่ถึงกำหนด</option><option value="all" {{ 'selected' if show=='all' }}>ทั้งหมดที่มีแผน</option></select>
+      <select name="horizon" style="width:auto">{% for h in [7,14,30,60] %}<option value="{{ h }}" {{ 'selected' if horizon==h }}>ภายใน {{ h }} วัน</option>{% endfor %}</select>
+      <select name="line" style="width:auto"><option value="">ทุก Line</option>{% for l in lines %}<option {{ 'selected' if line==l }}>{{ l }}</option>{% endfor %}</select>
+      <select name="customer" style="width:auto"><option value="">ทุกลูกค้า</option>{% for c in customers %}<option {{ 'selected' if customer==c }}>{{ c }}</option>{% endfor %}</select>
+    </form>
+    {% if lead and (groups.overdue or groups.due) %}
+    <form method="post" action="/pm/create-all"><input type="hidden" name="horizon" value="{{ horizon }}"><input type="hidden" name="line" value="{{ line }}"><input type="hidden" name="customer" value="{{ customer }}">
+      <button class="btn green" data-confirm="เปิดใบงาน PM ให้ทุกแม่พิมพ์ที่เกิน/ถึงกำหนด (ตามตัวกรอง) ที่ยังไม่มีใบงาน?">⚡ เปิดใบงาน PM ทั้งหมด ({{ (groups.overdue + groups.due)|rejectattr('id','in',open_die_ids)|list|length }})</button></form>{% endif %}
+  </div>
+  {% set rows = (groups.overdue + groups.due) if show=='due' else (groups.upcoming if show=='upcoming' else groups.overdue + groups.due + groups.upcoming) %}
+  {% if not rows %}<p class="muted">ไม่มีแม่พิมพ์ในกลุ่มนี้ — ตั้งแผน PM ได้ที่หน้าแม่พิมพ์ (วัน และ/หรือ Stroke) หรือดู <a href="/pm/suggest">รอบ PM ที่แนะนำ</a></p>{% endif %}
+  <div class="tbl-wrap"><table class="tbl responsive">
+    <thead><tr><th>สถานะ</th><th>แม่พิมพ์</th><th>Line / ลูกค้า</th><th>แผน</th><th>ครั้งถัดไป / Stroke</th><th></th></tr></thead><tbody>
+    {% for d in rows[:300] %}{% set s = groups.status[d.id] %}
+    <tr><td data-l="สถานะ"><span class="pill {{ {'overdue':'red','due':'amber','ok':'green'}.get(s.state,'gray') }}">{{ {'overdue':'เกินกำหนด','due':'ถึงกำหนด','ok':'ปกติ'}.get(s.state,'-') }}</span>
+        <br><small class="muted">{{ {'date':'ตามวัน','stroke':'ตาม Stroke','never':'ยังไม่เคย PM'}.get(s.reason,'') }}</small></td>
+      <td data-l="แม่พิมพ์"><a href="/dies/{{ d.id }}#pm"><b>{{ d.part_no }}</b></a> · {{ d.die_process }}<br><small class="muted">{{ d.part_name }} {{ d.die_code or '' }}</small></td>
+      <td data-l="Line">{{ d.line or '-' }}<br><small class="muted">{{ d.customer or '' }}</small></td>
+      <td data-l="แผน"><small>{% if d.pm_interval_days %}ทุก {{ d.pm_interval_days }} วัน{% endif %}{% if d.pm_interval_days and d.pm_interval_strokes %}<br>{% endif %}{% if d.pm_interval_strokes %}ทุก {{ '{:,}'.format(d.pm_interval_strokes) }} st{% endif %}</small></td>
+      <td data-l="ถัดไป" style="min-width:150px">{% if d.pm_interval_days %}<b style="{{ 'color:var(--red)' if s.days_left is not none and s.days_left < 0 }}">{{ s.next|d if s.next else 'ยังไม่เคย PM' }}</b>{% if s.days_left is not none %} <small class="muted">({{ ('เกิน ' ~ (-s.days_left) ~ ' วัน') if s.days_left < 0 else ('อีก ' ~ s.days_left ~ ' วัน') }})</small>{% endif %}<br>{% endif %}
+        {% if d.pm_interval_strokes %}<div class="progress" style="height:6px;margin:3px 0"><i style="width:{{ [d.stroke_pct or 0,100]|min }}%;{{ 'background:var(--red)' if (d.stroke_pct or 0) >= 100 else ('background:var(--amber)' if (d.stroke_pct or 0) >= 90 else '') }}"></i></div><small class="muted">{{ '{:,}'.format(d.strokes_since_pm) }} / {{ '{:,}'.format(d.pm_interval_strokes) }} ({{ d.stroke_pct }}%)</small>{% endif %}</td>
+      <td style="white-space:nowrap">{% if d.id in open_die_ids %}<span class="pill blue">มีใบงานแล้ว</span>
+        {% elif user.role in ('die_leader','foreman','admin','superadmin','manager') %}
+        <form method="post" action="/pm/create/{{ d.id }}" class="row" style="gap:4px"><input type="date" name="target_date" value="{{ s.next.isoformat() if s.next and s.next >= today else '' }}" style="width:auto"><button class="btn sm">เปิดใบงาน</button></form>{% endif %}
+        {% if lead and d.pm_interval_days %}<details class="pp"><summary class="btn sm ghost">⏭ เลื่อน</summary>
+          <form method="post" action="/pm/postpone/{{ d.id }}" class="pp-box"><label>เลื่อนเป็นวันที่</label><input type="date" name="new_date" required>
+            <label>เหตุผล</label><input name="reason" required placeholder="เช่น Line ผลิตต่อเนื่อง / รออะไหล่"><button class="btn sm amber">ยืนยันเลื่อน</button></form></details>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if rows|length > 300 %}<p class="muted">แสดง 300 แรกจาก {{ rows|length }} — ใช้ตัวกรอง Line / ลูกค้า</p>{% endif %}
+</div>
+
+<div class="grid g2" style="align-items:start">
+<div class="card">
+  <h3>📋 ใบงาน PM ที่กำลังดำเนินการ ({{ open_pm|length }})</h3>
+  <div class="list-cards">{% for r in open_pm[:40] %}{% set c = r.pm_checks %}
+    <a class="job {{ 'overdue' if r.is_overdue }}" href="/requests/{{ r.id }}"><div><div class="dr">{{ r.dr_no }} <span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span></div><div>{{ r.part_no }} · {{ r.die_process }} <span class="tag">{{ r.line or '-' }}</span></div>
+      <div class="meta">👷 {{ r.technician_names or '-' }}{% if c %} · Checklist {{ c|selectattr('result')|list|length }}/{{ c|length }}{% set ng = c|selectattr('result','equalto','NG')|list|length %}{% if ng %} · <span style="color:var(--red)">NG {{ ng }}</span>{% endif %}{% endif %}</div></div>
+      <div class="muted" style="font-size:.8rem;text-align:right">กำหนด<br>{{ r.target_date|d }}</div></a>
+  {% else %}<p class="muted">ไม่มี</p>{% endfor %}</div>
+</div>
+<div class="card">
+  <h3>🔍 จุดที่พบ NG บ่อยจาก Checklist (12 เดือน)</h3>
+  {% for text, n in k12.ng_top %}<div class="row between" style="padding:4px 0"><span>{{ text }}</span><b>{{ n }}</b></div><div class="progress" style="height:6px;margin-bottom:6px"><i style="width:{{ (100*n/k12.ng_top[0][1])|int }}%;background:var(--red)"></i></div>
+  {% else %}<p class="muted">ยังไม่มีข้อมูล — เมื่อช่างบันทึก Checklist ในใบงาน PM จุดที่ NG บ่อยจะแสดงที่นี่ (ใช้วางแผนอะไหล่ / ปรับรอบ PM)</p>{% endfor %}
+  {% if k12.avg_minutes %}<hr><small class="muted">เวลาทำ PM เฉลี่ย {{ k12.avg_minutes|minutes }} ต่อใบ</small>{% endif %}
+</div>
+</div>
+<style>
+.pp { display:inline-block; position:relative; }
+.pp > summary { list-style:none; display:inline-flex; } .pp > summary::-webkit-details-marker { display:none; }
+.pp-box { position:absolute; right:0; z-index:5; background:var(--card); box-shadow:var(--shadow); border:1px solid var(--line); border-radius:12px; padding:12px; width:260px; display:grid; gap:6px; margin-top:4px; }
+.pp-box label { font-size:.8rem; color:var(--muted); }
+</style>
+{% endblock %}

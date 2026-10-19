@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="{{ lang }}" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/app.css?v={{ app_version }}">
+<style>:root{--accent:{{ accent }};}</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% set path = request.url.path %}
+{% macro navlink(href, icon, label, match=None, badge=None) -%}
+  <a href="{{ href }}" class="{{ 'active' if (match or href) == path or (match and path.startswith(match) and match != '/') else '' }}"><span class="ico">{{ icon }}</span><span>{{ label }}</span>{% if badge %}<span class="badge">{{ badge }}</span>{% endif %}</a>
+{%- endmacro %}
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">A</div>
+      <div><b>{{ company.logo_text if company else 'AAPICO' }}</b><small>{{ company.name if company else app_name }}</small></div>
+    </div>
+    <nav class="nav">
+      {{ navlink('/', '🏠', t('home')) }}
+      {% if allowed('new') %}{{ navlink('/requests/new', '📝', t('menu_new_request')) }}{% endif %}
+      {{ navlink('/requests?view=approve', '✅', t('menu_approve') if sees_all or (user and user.role in ('technician',)) else 'ใบงานที่รอฉัน', match='/requests?view=approve') }}
+      {{ navlink('/requests?view=all', '📋', t('menu_requests') if sees_all else 'ใบงานของฉัน', match='/requests?view=all') }}
+      {{ navlink('/scan', '📷', t('menu_scan')) }}
+      <div class="sec">Die</div>
+      {% if allowed('pm') %}{{ navlink('/pm', '🛠️', t('menu_pm'), match='/pm') }}{% elif allowed('pm_strokes') %}{{ navlink('/pm/strokes', '🔢', 'บันทึก Stroke', match='/pm/strokes') }}{% endif %}
+      {{ navlink('/dies', '🧰', t('menu_dies'), match='/dies') }}
+      <div class="sec">Analytics</div>
+      {{ navlink('/dashboard', '📊', t('menu_dashboard')) }}
+      {{ navlink('/tv', '📺', t('menu_tv')) }}
+      {% if allowed('analytics') %}{{ navlink('/analytics', '🧠', 'วิเคราะห์เชิงลึก', match='/analytics') }}{% endif %}
+      {% if allowed('reports') %}{{ navlink('/reports', '📈', t('menu_reports')) }}{% endif %}
+      {% if allowed('anomaly') %}{{ navlink('/reports/anomaly', '🔎', t('menu_anomaly')) }}{% endif %}
+      <div class="sec">{{ 'System' if allowed('admin') or allowed('masters') else 'Help' }}</div>
+      {% if allowed('admin') %}{{ navlink('/admin', '⚙️', t('menu_admin'), match='/admin') }}
+      {% elif allowed('masters') %}{{ navlink('/admin/masters', '📚', 'Master data / นำเข้า', match='/admin') }}{% endif %}
+      {{ navlink('/roles', '🔐', 'สิทธิ์การใช้งาน', match='/roles') }}
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <a href="/" class="only-mobile" style="font-weight:900;color:var(--nav);font-size:18px">A</a>
+      <div class="title">{% block pagetitle %}{{ app_name }}{% endblock %}</div>
+      {% if user and user.is_superadmin %}
+      <form method="post" action="/switch-company" class="hide-mobile">
+        <select name="company_id" onchange="this.form.submit()" style="padding:6px 8px;width:auto">
+          {% for c in all_companies %}<option value="{{ c.id }}" {{ 'selected' if company and c.id == company.id }}>{{ c.code }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      <span class="lang-switch"><a href="/lang/th" class="{{ 'on' if lang=='th' }}">TH</a><a href="/lang/en" class="{{ 'on' if lang=='en' }}">EN</a></span>
+      <button class="iconbtn" id="bell" title="{{ t('notifications') }}">🔔<span class="badge bell-count" style="{{ '' if unread else 'display:none' }}">{{ unread }}</span></button>
+      <div class="notif-pop" id="notif-pop"></div>
+      <a href="/profile" class="hide-mobile" style="font-weight:700;color:var(--text)">{{ user.full_name if user else '' }} <small class="muted">· {{ t('role_' ~ user.role) if user else '' }}</small></a>
+      <a href="/logout" class="btn ghost sm hide-mobile">{{ t('logout') }}</a>
+    </header>
+    <main class="content">
+      {% set _m = request.query_params.get('msg') %}{% if _m %}<div class="alert {{ 'warn' if _m.startswith('⚠') or 'ไม่' in _m[:12] else 'success' }}">{{ _m }}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<nav class="bottomnav">
+  <a href="/" class="{{ 'active' if path=='/' }}"><span class="ico">🏠</span>{{ t('home') }}</a>
+  <a href="/requests/new" class="{{ 'active' if path=='/requests/new' }}"><span class="ico">📝</span>{{ t('new') }}</a>
+  <a href="/requests?view=approve" class="{{ 'active' if path.startswith('/requests') }}"><span class="ico">📋</span>{{ t('menu_requests') }}</a>
+  <a href="/scan" class="{{ 'active' if path=='/scan' }}"><span class="ico">📷</span>{{ t('menu_scan') }}</a>
+  <a href="/profile" class="{{ 'active' if path=='/profile' }}"><span class="ico">👤</span>{{ t('profile') }}</a>
+</nav>
+<script src="/static/js/app.js?v={{ app_version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

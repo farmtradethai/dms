@@ -1,0 +1,35 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><title>PM {{ req.dr_no }}</title>
+<style>
+@page { size: A4; margin: 10mm; }
+body { font-family: "Sarabun", Tahoma, sans-serif; font-size: 12.5px; color:#111; margin:0; }
+h1 { font-size: 17px; margin: 0; } .muted { color:#555; }
+table { width:100%; border-collapse: collapse; } td, th { border:1px solid #888; padding:4px 6px; vertical-align: top; }
+th { background:#eef2f8; } .hd td { border:none; padding:2px 0; }
+.ok { color:#127a3f; font-weight:700; } .ng { color:#c0392b; font-weight:700; } .sec td { background:#f5f5f5; font-weight:700; }
+.sign td { height:60px; text-align:center; vertical-align:bottom; width:25%; }
+.noprint { margin:10px 0; } @media print { .noprint { display:none; } }
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">🖨 พิมพ์</button> <a href="/requests/{{ req.id }}">← กลับ</a></div>
+<table class="hd"><tr><td><h1>PM CHECK SHEET — บันทึกการบำรุงรักษาแม่พิมพ์</h1><div class="muted">{{ company.name }}</div></td>
+<td style="text-align:right"><b>{{ req.dr_no }}</b><br>กำหนด {{ req.target_date|d }} · ปิดงาน {{ req.closed_at|d if req.closed_at else '-' }}</td></tr></table>
+<table style="margin:8px 0">
+<tr><th style="width:16%">Part No</th><td>{{ req.part_no }}</td><th style="width:16%">Die Process</th><td>{{ req.die_process }}</td></tr>
+<tr><th>Part Name</th><td>{{ req.part_name or '-' }}</td><th>Die Code</th><td>{{ req.die_code or '-' }}</td></tr>
+<tr><th>ลูกค้า / Model</th><td>{{ req.customer or '-' }} / {{ req.model or '-' }}</td><th>Line / เครื่อง</th><td>{{ req.line or '-' }} / {{ req.machine_no or '-' }}</td></tr>
+<tr><th>ช่าง</th><td>{{ req.technician_names or '-' }}</td><th>เวลาทำงานสุทธิ</th><td>{{ req.net_repair_minutes|minutes if req.net_repair_minutes else '-' }}</td></tr>
+{% if req.die %}<tr><th>Stroke สะสม</th><td>{{ '{:,}'.format(req.die.stroke_count or 0) }}</td><th>รอบ PM</th><td>{{ (req.die.pm_interval_days ~ ' วัน') if req.die.pm_interval_days }} {{ ('/ ' ~ '{:,}'.format(req.die.pm_interval_strokes) ~ ' stroke') if req.die.pm_interval_strokes }}</td></tr>{% endif %}
+</table>
+<table>
+<tr><th style="width:5%">#</th><th>รายการตรวจ</th><th style="width:14%">ผล / ค่าวัด</th><th style="width:28%">หมายเหตุ</th></tr>
+{% set ns = namespace(sec=None, n=0) %}
+{% for c in req.pm_checks %}
+  {% if c.section != ns.sec %}{% set ns.sec = c.section %}<tr class="sec"><td colspan="4">{{ c.section or 'ทั่วไป' }}</td></tr>{% endif %}
+  {% set ns.n = ns.n + 1 %}
+  <tr><td style="text-align:center">{{ ns.n }}</td><td>{{ c.text }}{% if c.kind=='value' and (c.spec_min is not none or c.spec_max is not none) %} <span class="muted">(spec {{ c.spec_min if c.spec_min is not none else '' }}–{{ c.spec_max if c.spec_max is not none else '' }} {{ c.unit }})</span>{% endif %}</td>
+    <td style="text-align:center">{% if c.kind=='value' and c.value is not none %}{{ c.value }} {{ c.unit }} {% endif %}<span class="{{ 'ok' if c.result=='OK' else 'ng' if c.result=='NG' else '' }}">{{ c.result or '☐' }}</span></td>
+    <td>{{ c.note or '' }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">ใบงานนี้ไม่มี checklist</td></tr>{% endfor %}
+</table>
+<p>สรุป: ตรวจ {{ st8.answered }}/{{ st8.total }} รายการ · NG {{ st8.ng }} รายการ · การแก้ไข: {{ req.action_text or '-' }}</p>
+<table class="sign"><tr><td>ช่างผู้ทำ PM<br>{{ req.technician_names or '' }}</td><td>หัวหน้า Die<br>{{ req.leader.full_name if req.leader else '' }}</td><td>Production (Try-out)<br>{{ req.tryout_by.full_name if req.tryout_by else '' }}</td><td>QC<br>{{ req.qc_by.full_name if req.qc_by else '' }}</td></tr></table>
+</body></html>

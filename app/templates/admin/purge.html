@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block pagetitle %}ล้างใบงานเก่า — {{ company.code }}{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="alert warn"><b>ใช้เมื่อต้องการเริ่มใช้งานจริงแบบสะอาด</b> — ลบเฉพาะ <b>ใบแจ้งซ่อม / ใบงาน PM</b> (รวมประวัติสถานะ, ช่างที่มอบหมาย, เวลาทำงาน, อะไหล่ที่ผูก, รูปของใบงานนั้น) ของบริษัท <b>{{ company.code }}</b> เท่านั้น<br>
+<b>คงไว้ทั้งหมด:</b> บริษัท · ผู้ใช้และรหัสผ่าน · ทะเบียนแม่พิมพ์ + แผน PM · Master ปัญหา/สาเหตุ/Line/ลูกค้า · ตั้งค่า · ช่องทางแจ้งเตือน · API key · Audit log · ข้อมูลบริษัทอื่น<br>
+ระบบ <b>สร้าง Backup (รวมรูป) ให้อัตโนมัติก่อนลบทุกครั้ง</b> — ถ้าลบผิดกู้คืนได้ที่หน้า Backup</div>
+
+<div class="grid g2" style="align-items:start">
+<form class="card" method="get" action="/admin/purge" id="pf">
+  <h3>1️⃣ เลือกสิ่งที่จะลบ แล้วกด "ตรวจนับ"</h3>
+  <div class="field"><label>ขอบเขต</label>
+    {% for k, v in scopes.items() %}<label class="check" style="font-weight:500;margin:4px 0"><input type="radio" name="scope" value="{{ k }}" {{ 'checked' if scope==k }}> {{ v }}</label>{% endfor %}</div>
+  <div class="grid g2" id="range" style="{{ '' if scope=='range' else 'display:none' }}">
+    <div class="field"><label>ตั้งแต่วันที่</label><input type="date" name="dfrom" value="{{ dfrom }}"></div>
+    <div class="field"><label>ถึงวันที่</label><input type="date" name="dto" value="{{ dto }}"></div>
+  </div>
+  <div class="field"><label>ประเภทใบงาน</label><div class="row">
+    {% for ty in REQUEST_TYPES %}<label class="check" style="font-weight:500"><input type="checkbox" name="types" value="{{ ty }}" {{ 'checked' if ty in types }}> {{ t('type_' ~ ty) }}</label>{% endfor %}</div></div>
+  <div class="field"><label>สถานะ</label><select name="status">{% for k, v in statuses.items() %}<option value="{{ k }}" {{ 'selected' if status==k }}>{{ v }}</option>{% endfor %}</select></div>
+  <button class="btn sec">🔍 ตรวจนับ</button>
+</form>
+
+<div class="card">
+  <h3>2️⃣ ผลการตรวจนับ</h3>
+  <div class="grid g3">
+    <div class="kpi red"><div class="v">{{ pv.requests }}</div><div class="l">ใบงานที่จะถูกลบ</div></div>
+    <div class="kpi"><div class="v">{{ pv.history }}</div><div class="l">ประวัติสถานะ</div></div>
+    <div class="kpi green"><div class="v">{{ pv.remaining }}</div><div class="l">ใบงานที่เหลืออยู่</div></div>
+  </div>
+  <p class="muted" style="margin-top:8px">ประเภท: {% for k, v in pv.by_type.items() %}<span class="tag">{{ t('type_' ~ k) }} {{ v }}</span> {% else %}-{% endfor %}
+   · รูป {{ pv.photos }} · อะไหล่ {{ pv.parts }} · ช่วงวันที่ {{ pv.first|d }} → {{ pv.last|d }}</p>
+
+  <form method="post" action="/admin/purge" class="stack" style="margin-top:10px">
+    <input type="hidden" name="scope" value="{{ scope }}"><input type="hidden" name="status" value="{{ status }}">
+    <input type="hidden" name="dfrom" value="{{ dfrom }}"><input type="hidden" name="dto" value="{{ dto }}">
+    {% for ty in types %}<input type="hidden" name="types" value="{{ ty }}">{% endfor %}
+    <h3 style="margin-top:6px">3️⃣ ตัวเลือกเพิ่มเติม (ไม่บังคับ)</h3>
+    <label class="check" style="font-weight:500"><input type="checkbox" name="del_users" value="1" checked> ลบบัญชีช่างชั่วคราวที่ระบบสร้างตอนนำเข้า (ระงับอยู่, ไม่มีรหัสผ่าน) ที่ไม่ถูกใช้แล้ว — มี {{ placeholder }} บัญชี</label>
+    <label class="check" style="font-weight:500"><input type="checkbox" name="del_dies" value="1"> ลบแม่พิมพ์ที่ไม่มี Die Code (สร้างอัตโนมัติจากข้อมูลเก่า) ที่ไม่มีใบงานเหลือและไม่มีแผน PM — มี {{ nocode }} รายการที่ไม่มีโค้ด</label>
+    <label class="check" style="font-weight:500"><input type="checkbox" name="reset_pm" value="1"> ล้างวันที่ PM ล่าสุด/ถัดไป ของทุกแม่พิมพ์ (เริ่มนับแผน PM ใหม่ — รอบ PM ที่ตั้งไว้ยังอยู่)</label>
+    <label class="check" style="font-weight:500"><input type="checkbox" name="clear_notif" value="1" checked> ล้างกระดิ่งแจ้งเตือนเก่าในแอป</label>
+    <div class="row"><label style="margin:0">เลขใบงานถัดไป</label><input name="next_dr" type="number" min="1" placeholder="ว่าง = ต่อจากเดิม ({{ company.dr_prefix }}{{ '%05d'|format(company.dr_seq + 1) }})" style="max-width:300px"></div>
+    <div class="help">เช่น ใส่ 1 → ใบงานใหม่เริ่ม {{ company.dr_prefix }}00001 (เปลี่ยน Prefix/รูปแบบได้ที่ ตั้งค่าบริษัท) · เลขที่ซ้ำกับใบงานที่เหลือจะถูกข้ามให้อัตโนมัติ</div>
+    <h3 style="margin-top:6px">4️⃣ ยืนยัน</h3>
+    <div class="row"><input name="confirm" placeholder="พิมพ์รหัสบริษัท {{ company.code }} เพื่อยืนยัน" required style="max-width:300px" autocomplete="off">
+      <button class="btn red" data-confirm="ลบใบงาน {{ pv.requests }} รายการของ {{ company.code }}? (ระบบจะ Backup ให้ก่อน)">🗑 Backup แล้วลบ {{ pv.requests }} ใบงาน</button></div>
+  </form>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll('[name=scope]').forEach(r => r.addEventListener('change', () => document.getElementById('range').style.display = document.querySelector('[name=scope]:checked').value === 'range' ? '' : 'none'));
+</script>{% endblock %}

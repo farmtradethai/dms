@@ -1,0 +1,12 @@
+{% from "_dcar_form.html" import dcar, styles %}<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700;800&display=swap" rel="stylesheet">
+{{ styles() }}
+</head><body>
+<div class="noprint"><button onclick="window.print()">🖨 พิมพ์ / บันทึก PDF ({{ items|length }} ใบ)</button>
+  <a class="sec" href="{{ back }}">← กลับ</a>
+  {% if note %}<div style="margin-top:8px;color:#6b7686;font-size:13px">{{ note }}</div>{% endif %}</div>
+{% for req, rounds in items %}{{ dcar(req, rounds, company) }}{% endfor %}
+{% if not items %}<p class="noprint">ไม่พบใบงานที่ปิดแล้วตามเงื่อนไข</p>{% endif %}
+</body></html>

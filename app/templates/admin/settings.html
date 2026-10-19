@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block pagetitle %}ตั้งค่าบริษัท {{ company.code }}{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<form method="post" action="/admin/settings" class="grid g2" style="align-items:start">
+<div class="stack">
+  <div class="card"><h3>🏢 บริษัท & เลขที่ใบงาน</h3>
+    <div class="grid g2">
+      <div class="field"><label>ชื่อบริษัท</label><input name="name" value="{{ company.name }}"></div>
+      <div class="field"><label>ข้อความ Logo มุมซ้ายบน</label><input name="logo_text" value="{{ company.logo_text }}"></div>
+      <div class="field"><label>Prefix เลขที่ใบงาน</label><input name="dr_prefix" value="{{ company.dr_prefix }}" placeholder="AHMD"></div>
+      <div class="field"><label>รูปแบบ</label><select name="dr_style"><option value="running" {{ 'selected' if company.dr_style=='running' }}>ต่อเนื่อง: {{ company.dr_prefix }}05001</option><option value="monthly" {{ 'selected' if company.dr_style=='monthly' }}>รายเดือน: {{ company.dr_prefix }}-2610-001</option></select></div>
+    </div>
+    <div class="help">เลขล่าสุดที่ออก: {{ company.dr_seq }} — นำเข้าข้อมูลเก่าจะคง AHMDxxxxx เดิม งานใหม่จะต่อจากเลขเดิมถ้าตั้ง Prefix เดียวกัน (ตั้งค่า dr_seq ในฐานข้อมูลหากต้องการเริ่มจากเลขเฉพาะ)</div>
+  </div>
+  <div class="card"><h3>⚙️ Workflow</h3>
+    <div class="grid g2">
+      <div class="field"><label>Required Day ที่ถือเป็น "งานด่วน"</label><select name="emergency_required_day">{% for d in REQUIRED_DAYS %}<option value="{{ d }}" {{ 'selected' if s.emergency_required_day==d }}>{{ d }} วัน</option>{% endfor %}</select></div>
+      <div class="field"><label class="check" style="margin-top:26px"><input type="checkbox" name="pm_skip_foreman" value="1" {{ 'checked' if s.pm_skip_foreman }}> งาน PM ข้ามขั้น Foreman (ไปหัวหน้า Die เลย)</label></div>
+      <div class="field"><label>เตือนผู้อนุมัติซ้ำเมื่อค้างเกิน (ชั่วโมง, 0 = ปิด)</label><input type="number" name="approval_reminder_hours" min="0" max="168" value="{{ s.approval_reminder_hours }}"><div class="help">ส่งเตือนถึงคนที่ใบงานค้างอยู่ วันละครั้ง (กระดิ่ง + อีเมล)</div></div>
+    </div></div>
+  <div class="card"><h3>🛠 PM แม่พิมพ์</h3>
+    <div class="grid g2">
+      <div class="field"><label>เปิดใบงาน PM อัตโนมัติล่วงหน้า (วัน, 0 = ปิด)</label><input type="number" name="pm_auto_create_days" min="0" max="60" value="{{ s.pm_auto_create_days or 0 }}"><div class="help">ทุกวันระบบเปิดใบงาน PM ให้แม่พิมพ์ที่จะถึงกำหนดภายในจำนวนวันนี้ (หรือ Stroke ถึงเกณฑ์) แล้วแจ้งหัวหน้า Die</div></div>
+      <div class="field"><label>Stroke ถึง % ของรอบ ถือว่า "ถึงกำหนด"</label><input type="number" name="pm_due_stroke_pct" min="50" max="100" value="{{ s.pm_due_stroke_pct or 90 }}"></div>
+      <div class="field"><label class="check"><input type="checkbox" name="pm_require_checklist" value="1" {{ 'checked' if s.pm_require_checklist }}> ต้องบันทึก PM Checklist ครบก่อนกด "ซ่อมเสร็จ"</label></div>
+      <div class="field"><a href="/pm/templates" class="btn sec sm">✅ จัดการ Checklist PM</a></div>
+    </div></div>
+  <div class="card"><h3>🔗 เชื่อมโปรแกรม Die Spare Part Inventory</h3>
+    <div class="field"><label>URL โปรแกรมอะไหล่</label><input name="spare_app_url" value="{{ s.spare_app_url }}" placeholder="https://die-spare.xxx.app"></div>
+    <div class="field"><label>API Key ของโปรแกรมอะไหล่ (ใช้ตอนเราสแกน Part ID ไปถาม)</label><input name="spare_api_key" value="{{ s.spare_api_key }}"></div>
+    <div class="help">ระบบจะเรียก <code>GET {url}/api/parts/{part_id}</code> เมื่อสแกน QR อะไหล่ — ตอบ JSON {part_no, part_name, on_hand, unit_cost, location}</div>
+  </div>
+</div>
+<div class="stack">
+  <div class="card"><h3>⏰ กะ & เวลาพัก (ใช้หักเวลาซ่อมสุทธิ / MTTR)</h3>
+    <textarea name="shifts_json" rows="14" style="font-family:monospace;font-size:.85rem">{{ shifts_json }}</textarea>
+    <div class="help">แก้เป็น JSON: แต่ละกะมี start/end และ breaks เป็นคู่ [เริ่ม, จบ] เวลา 24 ชม. — ค่าเริ่มต้นตามที่โรงงานกำหนด (10:00-10:10, 12:00-13:00, 15:00-15:10, OT 17:00-17:30 / 22:00-22:10, 00:00-01:00, 03:00-03:10, OT 05:00-05:30)</div></div>
+  <div class="card"><h3>🖼 รูปภาพ</h3>
+    <div class="grid g2">
+      <div class="field"><label>ลบรูปต้นฉบับของงานที่ปิดแล้วหลัง (วัน)</label><input type="number" name="image_archive_after_days" value="{{ s.image_archive_after_days }}"></div>
+      <div class="field"><label>เตือนเมื่อรูปรวมเกิน (MB)</label><input type="number" name="storage_warn_mb" value="{{ s.storage_warn_mb }}"></div>
+    </div></div>
+  <div class="card"><h3>📺 จอ TV</h3>
+    <div class="field"><label>ช่วงเวลาที่จอ TV ดึงข้อมูล (เว้นว่าง = ตลอด 24 ชม.)</label><input name="tv_working_hours" value="{{ s.tv_working_hours }}" placeholder="07:30-20:30"></div>
+    <div class="help">นอกช่วงเวลานี้จอ TV หยุดดึงข้อมูล → ฐานข้อมูลฟรีที่ "หลับเมื่อว่าง" (เช่น Neon) ได้พัก ประหยัดโควตา</div></div>
+  <button class="btn lg">{{ t('save') }}</button>
+</div>
+</form>
+<div class="card"><h3>🔑 API Keys (ให้โปรแกรมอะไหล่ / ระบบอื่นเรียกเข้ามา)</h3>
+  <table class="tbl"><tr><th>ชื่อ</th><th>Key</th><th>สร้างเมื่อ</th><th></th></tr>
+  {% for k in keys %}<tr><td>{{ k.name }}</td><td><code>{{ k.key }}</code></td><td>{{ k.created_at|dt }}</td><td><form method="post" action="/admin/apikeys/{{ k.id }}/delete"><button class="btn sm ghost" data-confirm="ลบ key?">🗑</button></form></td></tr>{% endfor %}</table>
+  <form method="post" action="/admin/apikeys" class="row" style="margin-top:8px"><input name="name" value="Spare Part App" style="width:auto"><button class="btn sec sm">+ สร้าง Key</button></form>
+  <div class="help" style="margin-top:8px">ตัวอย่างจากโปรแกรมอะไหล่: <code>POST {{ base_url }}/api/v1/spare-issue</code> header <code>X-API-Key</code> body <code>{"dr_no":"AHMD05001","part_no":"SP-000458","part_name":"Lower Insert","qty":2,"unit_cost":1850,"ref_no":"ISS-2610-015"}</code> → ต้นทุนผูกเข้า DR อัตโนมัติ · <code>POST /api/v1/low-stock</code> ส่งรายการต่ำกว่า Min มาแจ้งเตือน · เอกสารเต็มที่ <a href="/api/docs" target="_blank">/api/docs</a></div>
+</div>
+{% endblock %}

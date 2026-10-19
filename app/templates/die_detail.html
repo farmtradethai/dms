@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ die.part_no }} · {{ die.die_process }}{% endblock %}
+{% block content %}
+<div class="grid g2" style="align-items:start">
+<div class="stack">
+  <div class="card">
+    <div class="row between"><h2>{{ die.die_code or 'ไม่มี Die Code' }} <small class="muted">· {{ die.part_no }}</small></h2><a href="/requests/new?die_id={{ die.id }}" class="btn">📝 แจ้งซ่อม</a></div>
+    <div class="muted">{{ die.part_name }} · {{ die.die_process }} · {{ die.customer }} {{ die.model }} · {{ die.line }}</div>
+    <div class="grid g4" style="margin-top:12px">
+      <div class="kpi"><div class="v">{{ hist|length }}</div><div class="l">งานทั้งหมด</div></div>
+      <div class="kpi violet"><div class="v">{{ mttr|minutes if mttr else '-' }}</div><div class="l">MTTR</div></div>
+      <div class="kpi teal"><div class="v">{{ mtbf if mtbf else '-' }}</div><div class="l">MTBF (วัน)</div></div>
+      <div class="kpi amber"><div class="v">{{ cost|money }}</div><div class="l">ต้นทุนอะไหล่ ฿</div></div>
+    </div>
+  </div>
+  <div class="card" id="pm">
+    <h3>🛠 แผน PM {% if pm_st.state == 'overdue' %}<span class="pill red">เกินกำหนด</span>{% elif pm_st.state == 'due' %}<span class="pill amber">ถึงกำหนด</span>{% elif pm_st.state == 'ok' %}<span class="pill green">ปกติ</span>{% else %}<span class="pill gray">ยังไม่มีแผน</span>{% endif %}
+      {% if has_open_pm %}<span class="pill blue">มีใบงาน PM เปิดอยู่</span>{% elif pm_st.state != 'none' and user.role in ('die_leader','admin','superadmin','manager','foreman') %}
+      <form method="post" action="/pm/create/{{ die.id }}" style="margin-left:auto"><button class="btn sm">➕ เปิดใบงาน PM</button></form>{% endif %}</h3>
+    <div class="grid g2" style="gap:10px">
+      <div class="pmbox"><small class="muted">ตามวัน</small>
+        {% if die.pm_interval_days %}<div><b>ทุก {{ die.pm_interval_days }} วัน</b></div>
+          <div>ล่าสุด {{ die.pm_last_date|d if die.pm_last_date else '—' }} · ถัดไป <b style="{{ 'color:var(--red)' if pm_st.days_left is not none and pm_st.days_left < 0 }}">{{ pm_st.next|d if pm_st.next else 'ยังไม่เคย PM' }}</b></div>
+          {% if pm_st.days_left is not none %}<small class="muted">{{ ('เกินมา ' ~ (-pm_st.days_left) ~ ' วัน') if pm_st.days_left < 0 else ('อีก ' ~ pm_st.days_left ~ ' วัน') }}</small>{% endif %}
+        {% else %}<div class="muted">ไม่ได้ตั้ง</div>{% endif %}</div>
+      <div class="pmbox"><small class="muted">ตาม Stroke</small>
+        <div>สะสม <b>{{ '{:,}'.format(die.stroke_count or 0) }}</b> · หลัง PM <b>{{ '{:,}'.format(die.strokes_since_pm) }}</b></div>
+        {% if die.pm_interval_strokes %}<div class="progress" style="margin:6px 0"><i style="width:{{ [die.stroke_pct or 0, 100]|min }}%;{{ 'background:var(--red)' if (die.stroke_pct or 0) >= 100 else ('background:var(--amber)' if (die.stroke_pct or 0) >= 90 else '') }}"></i></div>
+          <small class="muted">{{ die.stroke_pct }}% ของรอบ {{ '{:,}'.format(die.pm_interval_strokes) }} stroke</small>
+        {% else %}<div class="muted">ไม่ได้ตั้ง</div>{% endif %}
+        <div style="margin-top:4px"><a href="/pm/strokes?die_id={{ die.id }}" class="btn sm sec">➕ บันทึก Stroke</a></div></div>
+    </div>
+    <div class="help" style="margin-top:8px">Checklist ที่ใช้: <b>{{ tmpl.name if tmpl else '—' }}</b> · <a href="/pm/templates{{ '?tid=' ~ tmpl.id if tmpl }}">ดู/แก้ checklist</a></div>
+    {% if user.role in ('die_leader','admin','superadmin','manager','foreman') %}
+    <details style="margin-top:10px" {{ 'open' if pm_st.state == 'none' }}><summary style="cursor:pointer;font-weight:700">✏️ ตั้ง / แก้แผน PM</summary>
+    <form method="post" action="/dies/{{ die.id }}/pm-plan" class="grid g2" style="margin-top:10px">
+      <div class="field"><label>รอบ PM (วัน) — 0 = ไม่ใช้</label><input type="number" min="0" name="pm_interval_days" value="{{ die.pm_interval_days or 0 }}"></div>
+      <div class="field"><label>รอบ PM (Stroke) — 0 = ไม่ใช้</label><input inputmode="numeric" name="pm_interval_strokes" value="{{ die.pm_interval_strokes or 0 }}"></div>
+      <div class="field"><label>PM ล่าสุด</label><input type="date" name="pm_last_date" value="{{ die.pm_last_date.isoformat() if die.pm_last_date else '' }}"></div>
+      <div class="field"><label>Stroke สะสมปัจจุบัน</label><input inputmode="numeric" name="stroke_count" value="{{ die.stroke_count or 0 }}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Checklist</label><select name="pm_template_id"><option value="">อัตโนมัติตาม Die Process ({{ tmpl.name if tmpl else '-' }})</option>{% for t in temps %}<option value="{{ t.id }}" {{ 'selected' if die.pm_template_id == t.id }}>{{ t.name }}</option>{% endfor %}</select></div>
+      <div class="field"><button class="btn">💾 บันทึกแผน PM</button></div>
+    </form>
+    <div class="help">ถึงกำหนดเมื่อครบ "วัน" หรือ "Stroke" อย่างใดอย่างหนึ่งก่อน · ปิดใบงาน PM แล้ว ระบบตั้ง PM ล่าสุด / นับ stroke ใหม่ให้อัตโนมัติ</div></details>
+    {% endif %}
+    {% if events or strokes %}<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">🕒 ประวัติแผน PM / Stroke</summary>
+      <table class="tbl" style="margin-top:6px;font-size:.85rem">
+      {% for e in events %}<tr><td><small>{{ e.at|dt }}</small></td><td><span class="pill {{ {'POSTPONE':'amber','PLAN':'blue','DONE':'green'}[e.kind] }}">{{ {'POSTPONE':'เลื่อน','PLAN':'แผน','DONE':'ทำ PM'}[e.kind] }}</span></td><td>{% if e.kind=='POSTPONE' %}{{ e.from_date|d }} → {{ e.to_date|d }} · {% endif %}{{ e.reason or '' }} <small class="muted">{{ e.user_name }}</small></td></tr>{% endfor %}
+      {% for l in strokes %}<tr><td><small>{{ l.at|dt }}</small></td><td><span class="pill gray">Stroke</span></td><td>+{{ '{:,}'.format(l.strokes) }} → {{ '{:,}'.format(l.total_after) }} <small class="muted">{{ l.source }} · {{ l.user_name }}</small></td></tr>{% endfor %}
+      </table></details>{% endif %}
+  </div>
+  {% if user.role in ('die_leader','admin','superadmin','manager','foreman') %}
+  <div class="card"><h3>✏️ ข้อมูลแม่พิมพ์</h3>
+    <form method="post" action="/dies/{{ die.id }}" class="grid g2">
+      <div class="field"><label>Die Code</label><input name="die_code" value="{{ die.die_code or '' }}"></div>
+      <div class="field"><label>Die Process</label><input name="die_process" value="{{ die.die_process }}"></div>
+      <div class="field"><label>Customer</label><input name="customer" value="{{ die.customer or '' }}"></div>
+      <div class="field"><label>Model</label><input name="model" value="{{ die.model or '' }}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Part Name</label><input name="part_name" value="{{ die.part_name or '' }}"></div>
+      <div class="field"><label>Line</label><input name="line" value="{{ die.line or '' }}"></div>
+      <div class="field"><label>Machine</label><input name="machine_no" value="{{ die.machine_no or '' }}"></div>
+      <div class="field"><label>สถานะ</label><select name="is_active"><option value="1" {{ 'selected' if die.is_active }}>ใช้งาน</option><option value="0" {{ 'selected' if not die.is_active }}>เลิกใช้</option></select></div>
+      <div class="field" style="align-self:end"><button class="btn">{{ t('save') }}</button></div>
+    </form></div>
+  {% endif %}
+  <div class="card"><h3>📊 ปัญหาที่พบบ่อย</h3>{% for p, n in problems[:8] %}<div class="row between" style="padding:4px 0"><span>{{ p }}</span><b>{{ n }}</b></div><div class="progress" style="height:6px;margin-bottom:6px"><i style="width:{{ (100*n/(problems[0][1] if problems else 1))|int }}%"></i></div>{% else %}<p class="muted">-</p>{% endfor %}</div>
+</div>
+<div class="card">
+  <h3>🕒 ประวัติซ่อม / PM ({{ hist|length }})</h3>
+  <div class="list-cards">{% for r in hist %}
+    <a class="job {{ 'emergency' if r.is_emergency }}" href="/requests/{{ r.id }}"><div><div class="dr">{{ r.dr_no }} <span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span> {% if r.request_type!='REPAIR' %}<span class="pill violet">{{ r.request_type }}</span>{% endif %}</div><div>{{ r.problem_text }} <small class="muted">→ {{ r.root_cause_text or '' }} {{ r.action_text[:60] if r.action_text else '' }}</small></div><div class="meta">👷 {{ r.technician_names }} · {{ r.net_repair_minutes|minutes if r.net_repair_minutes else '' }} · {{ r.parts_cost|money }}฿</div></div><div class="muted" style="font-size:.8rem">{{ r.created_at|d }}</div></a>
+  {% else %}<p class="muted">ยังไม่มีประวัติ</p>{% endfor %}</div>
+</div>
+</div>
+{% endblock %}

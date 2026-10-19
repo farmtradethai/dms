@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_avatar.html" import avatar %}
+{% block pagetitle %}{{ t('profile') }}{% endblock %}
+{% block content %}
+{% if force %}<div class="alert danger"><b>🔐 กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งาน</b> — บัญชีนี้ใช้รหัสเริ่มต้น/รหัสที่ผู้ดูแลตั้งให้ (ห้ามใช้ 1234 หรือรหัสเดิม)</div>{% endif %}
+<div class="grid g2">
+<div class="card">
+  <h3>👤 {{ user.full_name }} <small class="muted">· {{ t('role_' ~ user.role) }} · {{ user.username }}</small></h3>
+  <form method="post" action="/profile">
+    <div class="grid g2">
+      <div class="field"><label>{{ t('language') }}</label>
+        <select name="lang"><option value="th" {{ 'selected' if user.lang=='th' }}>ไทย</option><option value="en" {{ 'selected' if user.lang=='en' }}>English</option></select></div>
+      <div class="field"><label>{{ t('theme') }}</label>
+        <select name="theme">{% for th in themes %}<option value="{{ th }}" {{ 'selected' if user.theme==th }}>{{ th|capitalize }}</option>{% endfor %}</select></div>
+      <div class="field"><label>{{ t('accent') }}</label><input type="color" name="accent" value="{{ user.accent }}" style="height:44px;padding:4px"></div>
+      <div class="field"><label>{{ t('phone') }}</label><input name="phone" value="{{ user.phone or '' }}"></div>
+      <div class="field"><label>Email</label><input name="email" value="{{ user.email or '' }}"></div>
+    </div>
+    <hr>
+    <div class="grid g2">
+      <div class="field"><label>รหัสผ่านใหม่ / New password</label><input type="password" name="password" autocomplete="new-password"></div>
+      <div class="field"><label>ยืนยันรหัสผ่าน / Confirm</label><input type="password" name="password2" autocomplete="new-password"></div>
+    </div>
+    <button class="btn" type="submit">{{ t('save') }}</button>
+    <a href="/logout" class="btn ghost">{{ t('logout') }}</a>
+  </form>
+</div>
+<div class="card">
+  <div class="who" style="gap:14px;margin-bottom:10px">{{ avatar(user, 84) }}
+    <div><b>รูปของฉัน</b><div class="help">แสดงบนจอ TV และรายชื่อทีม</div>
+      <div class="row" style="margin-top:6px"><form method="post" action="/admin/users/{{ user.id }}/photo" enctype="multipart/form-data"><input type="hidden" name="back" value="/profile">
+        <label class="btn sm">📷 {{ 'เปลี่ยนรูป' if user.photo_path else 'อัปโหลดรูป' }}<input type="file" name="file" accept="image/*" capture="user" hidden onchange="this.form.submit()"></label></form>
+      {% if user.photo_path %}<form method="post" action="/admin/users/{{ user.id }}/photo/delete"><input type="hidden" name="back" value="/profile"><button class="btn sm ghost">ลบรูป</button></form>{% endif %}</div></div></div>
+  {% if my_steps %}<div class="alert info" style="font-size:.88rem"><b>🧭 คุณเป็นผู้อนุมัติ</b><ul style="margin:4px 0 0;padding-left:18px">{% for s in my_steps %}<li>{{ s }}</li>{% endfor %}</ul></div>{% endif %}
+  <h3>ℹ️</h3>
+  <p><b>{{ t('company') }}:</b> {{ company.name if company else '-' }}<br>
+  <b>{{ t('department') }}:</b> {{ user.department or '-' }} · <b>Line:</b> {{ user.line or '-' }} · <b>Shift:</b> {{ user.shift or '-' }}<br>
+  <b>Skills:</b> {{ user.skills or '-' }}</p>
+  <p class="muted">ธีมและสีที่เลือกจะถูกจำไว้กับบัญชีของคุณ ใช้ได้ทุกอุปกรณ์</p>
+</div>
+</div>
+{% endblock %}

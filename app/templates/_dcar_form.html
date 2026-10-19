@@ -1,0 +1,140 @@
+{# Official paper form TF-05.4-5 Rev.5 "Die Correction Action Request" — one A4 portrait sheet per ticket #}
+{% macro dcar(req, rounds, company) %}
+{% set h_fore = req.history|selectattr('to_status','equalto','WAIT_LEADER')|list %}
+{% set h_lead = req.history|selectattr('to_status','equalto','ASSIGNED')|list %}
+{% set fore_name = req.foreman.full_name if req.foreman else (h_fore[0].user_name if h_fore else '') %}
+{% set lead_name = req.leader.full_name if req.leader else (h_lead[0].user_name if h_lead else '') %}
+<section class="sheet">
+  <div class="docno">TF-05.4-5, Apr 01, 2021(Rev.5)</div>
+  <table class="f hdr">
+    <tr>
+      <td class="logo" rowspan="3"><div class="lg">A</div><div class="lt">{{ company.logo_text or 'AAPICO' }}</div></td>
+      <td class="title" rowspan="3">Die Correction Action Request</td>
+      <td class="kv"><b>Department :</b> <span class="val">{{ req.department or 'Production' }}</span></td>
+    </tr>
+    <tr><td class="kv"><b>Requestor :</b> <span class="val">{{ req.requester_name or '' }}</span></td></tr>
+    <tr><td class="kv"><b>Repair Type :</b> <span class="val">{{ {'REPAIR':'ซ่อมแม่พิมพ์','PM':'PM แม่พิมพ์','ACCIDENT':'Die Accident'}[req.request_type] }}</span></td></tr>
+  </table>
+  <table class="f">
+    <colgroup><col style="width:34%"><col style="width:20%"><col style="width:20%"><col style="width:26%"></colgroup>
+    <tr class="th"><td>Part Number</td><td>Customer/ลูกค้า</td><td>Model</td><td class="sm">Issue Date/วันที่เขียน</td></tr>
+    <tr class="v"><td>{{ req.part_no }}<div class="sub">{{ req.part_name or '' }}</div></td><td>{{ req.customer or '' }}</td><td>{{ req.model or '' }}</td><td>{{ req.created_at|dt }}</td></tr>
+    <tr class="th"><td>Die Process Number</td><td colspan="2">Press Machine Line</td><td class="sm">Finish Date/วันที่ต้องการ</td></tr>
+    <tr class="v"><td>{{ req.die_process or '' }}{% if req.die_code %}<div class="sub">Die Code {{ req.die_code }}</div>{% endif %}</td>
+      <td colspan="2">{{ req.line or '' }}{% if req.machine_no %} / {{ req.machine_no }}{% endif %}</td><td>{{ req.target_date|d }}</td></tr>
+  </table>
+  <table class="f">
+    <tr class="th"><td colspan="4">ระดับความเร่งด่วนในการซ่อม/Degree of Urgency</td><td colspan="2">Part ตัวอย่างในการซ่อม Die</td></tr>
+    <tr class="urg">
+      {% for code, lab in [('<1','(เร่งด่วน < 1 Day)'),('3','(Normal 3 Days)'),('5','(Normal 5 Days)'),('>7','(Normal > 7 Days)')] %}
+      <td><span class="cb">{{ '☑' if req.required_day == code else '☐' }}</span><div class="sm">{{ lab }}</div></td>{% endfor %}
+      <td><span class="{{ 'circ' if req.sample_part }}">Yes/มี</span></td><td><span class="{{ 'circ' if not req.sample_part }}">No/ไม่มี</span></td>
+    </tr>
+  </table>
+  <div class="gap"></div>
+  <table class="f">
+    <colgroup><col style="width:12%"><col style="width:36%"><col style="width:26%"><col style="width:26%"></colgroup>
+    <tr class="th"><td rowspan="2" class="side">ในส่วน<br>แผนก Die</td><td>Issue Number</td><td>พนักงานซ่อม/Name</td><td class="sm">วันที่ซ่อมเสร็จ/Modify<br>Finish Target Date</td></tr>
+    <tr class="v"><td class="big">{{ req.dr_no }}{% if req.legacy_id and req.legacy_id != req.dr_no %}<div class="sub">อ้างอิงเดิม {{ req.legacy_id }}</div>{% endif %}</td>
+      <td class="names">{{ req.technician_names or '' }}</td><td>{{ req.tech_completed_at|dt if req.tech_completed_at else '' }}</td></tr>
+  </table>
+  <table class="f pa">
+    <tr class="th l"><td><u>Problem (ปัญหาเขียนโดย PD Press)</u></td><td><u>Action (การแก้ไขเขียนโดยแผนก Die)</u></td></tr>
+    <tr class="pa-body">
+      <td><div class="ptxt">{{ req.problem_text or '' }}</div>{% if req.other_details %}<div class="pdet">{{ req.other_details }}</div>{% endif %}
+        <div class="pbot"><div class="legend">PD = Press Production<br>DM = Die Maintenance</div><div class="stock">Stock OH : <span class="val">{{ req.stock_oh if req.stock_oh is not none else '' }}</span></div></div></td>
+      <td>{% if req.root_cause_text %}<div class="cause">สาเหตุ: {{ req.root_cause_text }}</div>{% endif %}<div class="ptxt">{{ req.action_text or '' }}</div>
+        {% if req.parts %}<div class="pdet">อะไหล่: {% for p in req.parts %}{{ p.part_no }} {{ p.part_name or '' }} ×{{ p.qty|round(2) }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+        <div class="note">* ในกรณีที่ทำการเจียรลับ Punch ให้พนักงานทำการวัดความยาว Punch และลงบันทึก หลังการเจียร ลับ Punch เป็นตัวเลขเทียบกับ Std. ความยาวของ Punch Std. (-2.0 mm)
+          {% if req.punch_length_after %}<div class="val">บันทึก: {{ req.punch_length_after }}</div>{% endif %}</div></td>
+    </tr>
+  </table>
+  <table class="f sig">
+    <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
+    <tr class="th"><td colspan="2">Issuing Department PD Press/แผนก Press เซ็นต์</td><td colspan="2">Recipient Department Die Maintenance</td></tr>
+    <tr class="th"><td>Issuer by PD</td><td>Check by PD</td><td>Confirm</td><td>Approval</td></tr>
+    <tr class="box">
+      <td>{% if req.requester_name %}<div class="es">✔ {{ req.requester_name }}</div><div class="ed">{{ req.created_at|dt }}</div>{% endif %}</td>
+      <td>{% if req.foreman_at %}<div class="es">✔ {{ fore_name }}</div><div class="ed">{{ req.foreman_at|dt }}</div>{% endif %}</td>
+      <td>{% if req.tech_completed_at %}<div class="es">✔ {{ req.technician_names }}</div><div class="ed">{{ req.tech_completed_at|dt }}</div>{% endif %}</td>
+      <td>{% if req.leader_at %}<div class="es">✔ {{ lead_name }}</div><div class="ed">{{ req.leader_at|dt }}</div>{% endif %}</td>
+    </tr>
+    <tr class="cap"><td>พนักงาน Die Setting,MC Operator หรือ Leader Line เซ็นต์</td><td>Foreman,Engineer หรือ ผู้จัดการ เซ็นต์ กรณีไม่พบให้ Leader เซ็นต์ แทนได้ เช่น กะดึก หรือ ช่วง OT</td><td>พนักงานซ่อม Die</td><td>หัวหน้างาน Die</td></tr>
+  </table>
+  <table class="f to">
+    <colgroup><col style="width:56%"><col style="width:22%"><col style="width:22%"></colgroup>
+    <tr class="th"><td>T/O Result</td><td>QA,QC Judgement</td><td>Confirmer</td></tr>
+    {% for i in range([3, rounds|length]|max) %}{% set rd = rounds[i] if i < rounds|length else None %}
+    <tr class="tor"><td><span class="lab">#{{ i + 1 }} Date :</span> <span class="val">{{ rd.date|dt if rd and rd.date else '' }}</span>
+        <span class="lab" style="margin-left:14px">Comment :</span> <span class="val">{{ rd.comment if rd else '' }}</span></td>
+      <td class="c"><span class="val {{ 'ng' if rd and rd.judge == 'NG' }}">{{ rd.judge if rd and rd.judge else '' }}</span></td>
+      <td class="c">{{ rd.confirmer if rd and rd.confirmer else '' }}{% if rd and rd.qc_date %}<div class="ed">{{ rd.qc_date|dt }}</div>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  <div class="flow">
+    <div>Production Issue<br>&amp; QC Comment</div><span>➡</span><div>Die Maintenance<br>Action</div><span>➡</span><div>Try-Out<br>(Production)</div><span>➡</span><div>Q.C. Approve<br>(Judgement)</div><span>➡</span><div>Die Maintenance<br>Keep Document</div>
+  </div>
+  <div class="foot"><img src="/requests/{{ req.id }}/qr.png?size=2" alt=""><span>สแกนเพื่อเปิดใบงาน · ลงนามอิเล็กทรอนิกส์จากระบบ Die Management System · สถานะ: {{ req.status }}{% if req.closed_at %} · ปิดงาน {{ req.closed_at|dt }}{% endif %}</span></div>
+</section>
+{% endmacro %}
+
+{% macro styles() %}
+<style>
+ @page { size: A4 portrait; margin: 7mm; }
+ * { box-sizing: border-box; }
+ body { font-family: Sarabun, Tahoma, sans-serif; color: #10204a; margin: 0; background: #e9edf3; }
+ .sheet { width: 196mm; min-height: 276mm; margin: 10px auto; background: #fff; border: 2px solid #10204a; padding: 3mm 3.5mm; position: relative; page-break-after: always; break-after: page; }
+ .sheet:last-of-type { page-break-after: auto; break-after: auto; }
+ .docno { text-align: right; font-size: 9px; font-weight: 700; margin-bottom: 1mm; }
+ table.f { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0; }
+ table.f td { border: 1.4px solid #10204a; padding: 3px 6px; vertical-align: middle; font-size: 12px; }
+ table.f tr.th td { text-align: center; font-weight: 800; font-size: 12.5px; }
+ table.f tr.th.l td { text-align: left; }
+ table.f td.sm, .sm { font-size: 9.5px !important; }
+ table.f tr.v td { color: #1f5fbf; font-weight: 700; font-size: 15px; height: 11mm; }
+ .sub { font-size: 9.5px; color: #10204a; font-weight: 500; }
+ .val { color: #1f5fbf; font-weight: 700; }
+ .val.ng { color: #d13a3a; }
+ .hdr td { border: 1.4px solid #10204a; }
+ .hdr .logo { width: 22mm; text-align: center; border-right: 0 !important; }
+ .lg { width: 13mm; height: 13mm; margin: 0 auto; border-radius: 3mm; background: linear-gradient(135deg, #6b7686, #2b3445); color: #fff; font-weight: 900; font-size: 26px; line-height: 13mm; }
+ .lt { font-size: 9px; font-weight: 800; letter-spacing: .5px; }
+ .hdr .title { font-size: 24px; font-weight: 800; text-align: left; border-left: 0 !important; }
+ .hdr .kv { width: 63mm; font-size: 11.5px; height: 7mm; }
+ .urg td { text-align: center; height: 12mm; }
+ .cb { font-size: 22px; line-height: 1; }
+ .circ { border: 1.6px solid #1f5fbf; border-radius: 50%; padding: 5px 14px; font-weight: 800; color: #1f5fbf; }
+ .gap { height: 4mm; }
+ .side { font-size: 11px !important; }
+ td.big { font-size: 17px !important; }
+ td.names { font-size: 11px !important; }
+ .pa td { width: 50%; vertical-align: top !important; }
+ .pa-body td { height: 46mm; position: relative; padding-bottom: 19mm !important; }
+ .ptxt { color: #1f5fbf; font-weight: 800; font-size: 18px; margin-top: 8mm; white-space: pre-line; }
+ .pdet { color: #1f5fbf; font-size: 11px; margin-top: 3px; white-space: pre-line; }
+ .cause { font-size: 11px; font-weight: 700; }
+ .pbot { position: absolute; left: 6px; right: 6px; bottom: 5px; display: flex; align-items: center; gap: 10px; }
+ .legend { border: 1.4px solid #10204a; font-size: 9.5px; font-weight: 700; padding: 2px 5px; }
+ .stock { font-weight: 800; font-size: 14px; }
+ .note { position: absolute; left: 6px; right: 6px; bottom: 5px; border: 1.4px solid #10204a; font-size: 9px; font-weight: 700; padding: 3px 5px; }
+ .sig { margin-top: 0; }
+ .sig .box td { height: 19mm; vertical-align: middle; text-align: center; }
+ .es { color: #1f5fbf; font-weight: 800; font-size: 11.5px; }
+ .ed { font-size: 9.5px; color: #4a5672; }
+ .sig .cap td { text-align: center; font-size: 9.5px; font-weight: 700; height: 11mm; }
+ .to { margin-top: 4mm; }
+ .tor td { height: 10mm; }
+ .tor .lab { font-size: 10.5px; font-weight: 700; }
+ td.c { text-align: center; }
+ .flow { display: flex; align-items: center; justify-content: space-between; margin-top: 4mm; gap: 2mm; }
+ .flow div { border: 1.4px solid #10204a; font-size: 9.5px; font-weight: 700; text-align: center; padding: 3px 4px; flex: 1; }
+ .flow span { color: #4aa8e8; font-size: 18px; }
+ .foot { display: flex; align-items: center; gap: 6px; margin-top: 3mm; font-size: 8.5px; color: #6b7686; }
+ .foot img { height: 13mm; }
+ .noprint { text-align: center; margin: 12px; font-family: Sarabun, sans-serif; }
+ .noprint button, .noprint a { font: inherit; padding: 8px 18px; border-radius: 8px; border: 0; background: #1f5fbf; color: #fff; text-decoration: none; margin: 0 4px; cursor: pointer; }
+ .noprint a.sec { background: #e3e9f2; color: #1c2431; }
+ @media print { body { background: #fff; } .noprint { display: none; } .sheet { margin: 0; border-width: 2px; height: 281mm; min-height: 0; overflow: hidden; } }
+ @media screen and (max-width: 800px) { .sheet { transform-origin: top left; zoom: .5; } }
+</style>
+{% endmacro %}

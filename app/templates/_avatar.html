@@ -1,0 +1,8 @@
+{# staff photo, or coloured initials when there is no photo yet #}
+{% macro avatar(u, size=36) -%}
+{%- set nm = (u.full_name or u.username or '?')|replace('นางสาว','')|replace('นาย','')|replace('นาง','')|replace('Mr.','')|replace('Ms.','')|replace('Mrs.','')|trim -%}
+{%- set first = nm[:2] if nm[:1] in 'เแโใไ' else nm[:1] -%}
+{%- set hues = [210, 160, 25, 280, 340, 190, 45, 120] -%}
+{%- if u.photo_path -%}<img class="av" src="{{ u.photo_path|media }}" alt="{{ u.full_name }}" loading="lazy" style="width:{{ size }}px;height:{{ size }}px">
+{%- else -%}<span class="av av-i" style="width:{{ size }}px;height:{{ size }}px;font-size:{{ (size*0.42)|int }}px;background:hsl({{ hues[u.id % 8] }},55%,46%)">{{ first|upper }}</span>{%- endif -%}
+{%- endmacro %}

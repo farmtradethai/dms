@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block pagetitle %}เริ่มต้นบริษัท / ความพร้อมใช้งาน{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+
+<div class="card">
+  <div class="row between" style="margin-bottom:8px">
+    <h3 style="margin:0">🚀 ตั้งค่าบริษัท {{ company.code }} ให้พร้อมใช้งานจริง</h3>
+    {% if r.ready %}<span class="pill green" style="font-size:.9rem">✅ พร้อมใช้งานจริง</span>{% else %}<span class="pill amber" style="font-size:.9rem">ยังขาดข้อมูลจำเป็น {{ r.req_total - r.req_ok }} ข้อ</span>{% endif %}
+  </div>
+  <div class="stepper">
+    <div><b>ดาวน์โหลด Template</b><small class="muted">ไฟล์ Excel เดียว 10 ชีต ครบทุกข้อมูลตั้งต้น มี dropdown และตัวอย่าง</small></div>
+    <div><b>กรอกข้อมูล</b><small class="muted">Line · ลูกค้า · ปัญหา · สาเหตุ · ผู้ใช้ · ผังผู้อนุมัติ · แม่พิมพ์ · (ใบงานเก่า)</small></div>
+    <div><b>อัปโหลดเพื่อตรวจ</b><small class="muted">ระบบตรวจทุกแถว บอกเลขแถวที่ผิด ยังไม่บันทึกอะไร</small></div>
+    <div><b>นำเข้าจริง + เช็กความพร้อม</b><small class="muted">ผ่านทุกข้อ "จำเป็น" แล้วเปิดใช้งานได้</small></div>
+  </div>
+</div>
+
+<div class="grid g2" style="align-items:start">
+<div>
+  <div class="card" id="kit">
+    <h3>📥 1) Template ข้อมูลตั้งต้น</h3>
+    <div class="row">
+      <a class="btn" href="/admin/setup/kit.xlsx">⬇ Template เปล่า (มีตัวอย่าง)</a>
+      <a class="btn sec" href="/admin/setup/kit.xlsx?data=1">⬇ พร้อมข้อมูลปัจจุบันของ {{ company.code }}</a>
+    </div>
+    <div class="help" style="margin-top:8px">แบบ "พร้อมข้อมูลปัจจุบัน" ใช้แก้ข้อมูลทีละมาก: แก้ใน Excel แล้วอัปโหลดกลับ — แถวที่มีอยู่จะถูกอัปเดต ไม่สร้างซ้ำ</div>
+    <table class="tbl" style="margin-top:10px;font-size:.88rem">
+      <tr><th>ชีต</th><th>ข้อมูล</th><th></th></tr>
+      <tr><td>1_Company</td><td>เลขใบงาน, เวลากะ/เวลาพัก, เกณฑ์งานด่วน, เวลาเตือนผู้อนุมัติ</td><td><span class="pill red">จำเป็น</span></td></tr>
+      <tr><td>2_Lines · 3_Customers</td><td>Line การผลิต, ลูกค้า</td><td><span class="pill red">จำเป็น</span></td></tr>
+      <tr><td>4_Problems · 5_RootCauses</td><td>ปัญหาที่ Production เลือก, สาเหตุที่ช่างเลือก</td><td><span class="pill red">จำเป็น</span></td></tr>
+      <tr><td>6_Users</td><td>ทุกคนที่ใช้ระบบ + บทบาท + Line ประจำ + อีเมล</td><td><span class="pill red">จำเป็น</span></td></tr>
+      <tr><td>7_Approvers</td><td>ผังผู้อนุมัติแต่ละขั้น แยกตาม Line</td><td><span class="pill amber">แนะนำ</span></td></tr>
+      <tr><td>8_Dies</td><td>ทะเบียนแม่พิมพ์ + รอบ PM</td><td><span class="pill red">จำเป็น</span></td></tr>
+      <tr><td>9_History</td><td>ใบแจ้งซ่อมเก่าย้อนหลัง</td><td><span class="pill gray">ไม่บังคับ</span></td></tr>
+    </table>
+    <div class="help">รูปพนักงาน: อัปโหลดเป็น ZIP ที่ <a href="/admin/users#photos">ผู้ใช้ › รูปพนักงาน</a> (ชื่อไฟล์ = username หรือรหัสพนักงาน)</div>
+  </div>
+
+  <div class="card">
+    <h3>📤 2) อัปโหลดเพื่อตรวจ</h3>
+    <form method="post" action="/admin/setup/upload" enctype="multipart/form-data" class="row">
+      <input type="file" name="file" accept=".xlsx" required style="flex:1;min-width:200px"><button class="btn">🔍 ตรวจไฟล์</button>
+    </form>
+    <div class="help">ตรวจอย่างเดียว ยังไม่บันทึก · นำเข้าเฉพาะบริษัท {{ company.code }} ที่คุณใช้งานอยู่</div>
+
+    {% if report %}
+    <hr>
+    {% if report.fatal %}<div class="alert danger">{{ report.fatal }}</div>
+    {% else %}
+      {% if report.imported %}<div class="alert success"><b>✅ นำเข้าเรียบร้อย</b> — ตรวจความพร้อมด้านขวา</div>
+      {% elif report.ok %}<div class="alert success"><b>ไฟล์ถูกต้องทั้งหมด</b> — กดนำเข้าจริงได้เลย</div>
+      {% else %}<div class="alert danger"><b>พบข้อผิดพลาด {{ report.errors }} จุด</b> — แก้ในไฟล์แล้วอัปโหลดใหม่ (ยังไม่ได้บันทึกอะไร)</div>{% endif %}
+      {% for s in report.sheets if s.present %}
+      <div class="rep-sheet">
+        <div class="row between"><b>{{ '❌' if s.errors else ('⚠️' if s.warnings else '✅') }} {{ s.sheet }} · {{ s.title }}</b>
+          <small class="muted">{{ s.rows }} แถว · {{ 'เพิ่ม' if report.imported else 'จะเพิ่ม' }} {{ s.created }} · {{ 'อัปเดต' if report.imported else 'จะอัปเดต' }} {{ s.updated }}</small></div>
+        {% if s.errors %}<ul style="color:var(--red)">{% for e in s.errors[:15] %}<li>{{ e }}</li>{% endfor %}{% if s.errors|length > 15 %}<li>... อีก {{ s.errors|length - 15 }} รายการ</li>{% endif %}</ul>{% endif %}
+        {% if s.warnings %}<ul style="color:var(--amber)">{% for e in s.warnings[:10] %}<li>{{ e }}</li>{% endfor %}{% if s.warnings|length > 10 %}<li>... อีก {{ s.warnings|length - 10 }} รายการ</li>{% endif %}</ul>{% endif %}
+      </div>
+      {% endfor %}
+      {% set missing = report.sheets|rejectattr('present')|map(attribute='sheet')|list %}
+      {% if missing and not report.imported %}<div class="help">ไม่มีชีต: {{ missing|join(', ') }} (ข้ามได้ ถ้าไม่ต้องการนำเข้า)</div>{% endif %}
+      {% if report.ok and not report.imported and token %}
+      <form method="post" action="/admin/setup/upload" style="margin-top:10px"><input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="do_import" value="1">
+        <button class="btn green lg" data-confirm="นำเข้าข้อมูลเข้าบริษัท {{ company.code }}?">✅ 3) นำเข้าจริง</button></form>
+      {% endif %}
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between"><h3 style="margin:0">🩺 4) ความพร้อมก่อนใช้งานจริง</h3><a class="btn sm ghost" href="/admin/setup">↻ ตรวจใหม่</a></div>
+  <div class="row between" style="margin:10px 0 4px"><small>จำเป็น <b>{{ r.req_ok }}/{{ r.req_total }}</b> · แนะนำ <b>{{ r.rec_ok }}/{{ r.rec_total }}</b></small><b>{{ r.pct }}%</b></div>
+  <div class="meter"><i style="width:{{ r.pct }}%"></i></div>
+  {% for g, items in r.groups.items() %}
+    <h4 style="margin:16px 0 4px">{{ g }}</h4>
+    <ul class="check-list">
+    {% for i in items %}
+      <li><span class="ic">{{ '✅' if i.ok else ('❌' if i.level=='req' else '⚠️') }}</span>
+        <div><b style="font-weight:600">{{ i.title }}</b> {% if i.level=='req' %}<span class="pill red" style="font-size:.66rem">จำเป็น</span>{% endif %}<small>{{ i.detail }}</small></div>
+        {% if not i.ok %}<a class="btn sm sec" href="{{ i.fix }}">{{ i.fix_label }} →</a>{% else %}<span></span>{% endif %}</li>
+    {% endfor %}
+    </ul>
+  {% endfor %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block pagetitle %}Audit log{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<form class="card tight row">
+  <input name="q" value="{{ q }}" placeholder="🔍 ผู้ใช้ / เลขรายการ / รายละเอียด" style="flex:1;min-width:200px">
+  <select name="action" style="width:auto" onchange="this.form.submit()"><option value="">ทุกการกระทำ</option>{% for a in actions %}<option {{ 'selected' if a==action }}>{{ a }}</option>{% endfor %}</select>
+  <button class="btn sm">{{ t('search') }}</button>
+  <span class="muted" style="font-size:.85rem">บันทึกทุกการ login · แก้ไขใบงาน · ลบรูป · Backup/Restore · ลบข้อมูล · ตั้งค่า</span>
+</form>
+<div class="card tight"><div class="tbl-wrap"><table class="tbl responsive"><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>รายการ</th><th>รายละเอียด</th></tr></thead><tbody>
+{% for a in rows %}<tr><td data-l="เวลา">{{ a.at|dt }}</td><td data-l="ผู้ใช้">{{ a.user_name }}</td><td data-l="การกระทำ"><span class="tag">{{ a.action }}</span></td><td data-l="รายการ">{{ a.entity }} #{{ a.entity_id }}</td><td data-l="รายละเอียด"><small style="word-break:break-word">{{ a.detail or '' }}</small></td></tr>{% else %}<tr><td colspan="5" class="muted">ไม่พบรายการ</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="row" style="margin-top:8px">{% if page > 1 %}<a class="btn sm sec" href="?page={{ page-1 }}&q={{ q }}&action={{ action }}">← ก่อนหน้า</a>{% endif %}{% if rows|length == 100 %}<a class="btn sm sec" href="?page={{ page+1 }}&q={{ q }}&action={{ action }}">ถัดไป →</a>{% endif %}</div></div>
+{% endblock %}

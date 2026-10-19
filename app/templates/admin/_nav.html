@@ -1,0 +1,17 @@
+{% set p = request.url.path %}
+<div class="tabs">
+  <a href="/admin" class="{{ 'active' if p=='/admin' }}">⚙️ ภาพรวม</a>
+  <a href="/admin/setup" class="{{ 'active' if p.startswith('/admin/setup') }}">🚀 เริ่มต้นบริษัท</a>
+  <a href="/admin/users" class="{{ 'active' if p.startswith('/admin/users') }}">👥 ผู้ใช้ & สิทธิ์</a>
+  <a href="/admin/approvers" class="{{ 'active' if p.startswith('/admin/approvers') }}">🧭 ผังผู้อนุมัติ</a>
+  <a href="/admin/masters" class="{{ 'active' if p.startswith('/admin/masters') }}">📚 Master data</a>
+  <a href="/admin/settings" class="{{ 'active' if p.startswith('/admin/settings') }}">🛠 ตั้งค่าบริษัท</a>
+  <a href="/admin/channels" class="{{ 'active' if p.startswith('/admin/channels') }}">🔔 ช่องทางแจ้งเตือน</a>
+  <a href="/admin/import" class="{{ 'active' if p.startswith('/admin/import') }}">⬆ นำเข้าข้อมูล</a>
+  <a href="/admin/storage" class="{{ 'active' if p.startswith('/admin/storage') }}">🖼 รูปภาพ/พื้นที่</a>
+  <a href="/admin/backup" class="{{ 'active' if p.startswith('/admin/backup') }}">💾 Backup</a>
+  <a href="/admin/purge" class="{{ 'active' if p.startswith('/admin/purge') }}">🧹 ล้างใบงานเก่า</a>
+  <a href="/admin/system" class="{{ 'active' if p.startswith('/admin/system') }}">🩺 สุขภาพระบบ</a>
+  <a href="/admin/audit" class="{{ 'active' if p.startswith('/admin/audit') }}">🧾 Audit log</a>
+  {% if user.is_superadmin %}<a href="/admin/companies" class="{{ 'active' if p.startswith('/admin/companies') }}">🏢 บริษัท</a>{% endif %}
+</div>

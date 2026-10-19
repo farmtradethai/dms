@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block pagetitle %}สุขภาพระบบ{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="grid g2" style="align-items:start">
+<div class="card"><h3>✅ Checklist ความพร้อม (Host ฟรี / ใช้งานจริง)</h3>
+  {% for c in checks %}<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line);align-items:flex-start;flex-wrap:nowrap">
+    <span style="font-size:18px">{{ '✅' if c.ok else '⚠️' }}</span>
+    <div><b>{{ c.title }}</b>{% if not c.ok %}<div class="muted" style="font-size:.85rem">{{ c.fix }}</div>{% endif %}</div></div>{% endfor %}
+  <div class="row" style="margin-top:12px">
+    <form method="post" action="/admin/system/disable-demo"><button class="btn amber" data-confirm="ปิดบัญชีทดลอง ah_* ทั้งหมด (ยกเว้นบัญชีที่คุณใช้อยู่)?">🔒 ปิดบัญชีทดลอง</button></form>
+    <form method="post" action="/admin/users/force-password"><button class="btn sec" data-confirm="บังคับให้ทุกคนตั้งรหัสใหม่ในการเข้าครั้งถัดไป?">🔐 บังคับทุกคนเปลี่ยนรหัส</button></form>
+    <form method="post" action="/admin/run-checks"><button class="btn sec">▶ รันงานตรวจสอบตอนนี้</button></form>
+  </div>
+</div>
+<div class="stack">
+  <div class="card"><h3>ℹ️ ข้อมูลระบบ</h3><table class="tbl">{% for k, v in info.items() %}<tr><td class="muted">{{ k }}</td><td><b>{{ v }}</b></td></tr>{% endfor %}</table></div>
+  <div class="card tight"><h3>🗄 จำนวนแถวในฐานข้อมูล (ทุกบริษัท)</h3><table class="tbl">{% for k, v in counts.items() %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}</table></div>
+</div>
+</div>
+{% endblock %}

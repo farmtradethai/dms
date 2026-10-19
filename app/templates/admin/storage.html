@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block pagetitle %}รูปภาพ / พื้นที่{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="grid g4">
+  <div class="kpi {{ 'red' if stats.warn else 'green' }}"><div class="v">{{ stats.mb }} MB</div><div class="l">รูปทั้งหมด {{ stats.count }} ไฟล์ · เตือนที่ {{ stats.warn_mb }} MB</div></div>
+  <div class="kpi"><div class="v">{{ stats.backend }}</div><div class="l">ที่เก็บ</div></div>
+  <div class="kpi teal"><div class="v">{{ stats.disk_free_mb if stats.disk_free_mb is not none else '-' }} MB</div><div class="l">พื้นที่ดิสก์ว่าง</div></div>
+  <div class="kpi amber"><div class="v">{{ stats.pct }}%</div><div class="l">ใช้ไปจากเพดานเตือน</div></div>
+</div>
+<div class="grid g2" style="margin-top:14px">
+  <div class="card"><h3>🧹 นโยบายรูป (ทำอัตโนมัติตอนอัปโหลด)</h3>
+    <ul style="line-height:1.9"><li>ย่อรูปทุกใบเหลือด้านยาวสุด 1,600 px, JPEG 78% (≈150–350 KB/รูป) + thumbnail 360 px</li><li>มือถือย่อรูปก่อนส่งอีกชั้น ประหยัด 4G</li><li>เก็บไฟล์บนดิสก์/Object storage — <b>ไม่เก็บรูปในฐานข้อมูล</b> ฐานข้อมูลจึงเล็กเสมอ</li><li>เมื่อเกินเพดาน ระบบแจ้งเตือน Admin/Manager วันละครั้ง</li></ul>
+    <h3 style="margin-top:14px">📦 Archive รูปเก่า</h3>
+    <p>ลบ <b>รูปต้นฉบับ</b> ของงานที่ <b>ปิดแล้ว</b> เกิน N วัน — คง thumbnail ไว้ดูอ้างอิง ข้อมูลใบงานไม่หาย</p>
+    <form method="post" action="/admin/storage/export" style="margin-bottom:8px"><button class="btn sec">1) รวมรูปต้นฉบับทั้งหมดเป็น ZIP เพื่อ Backup ก่อน</button></form>
+    <form method="post" action="/admin/storage/archive" class="row"><input type="number" name="days" value="{{ archive_days }}" style="width:100px"> วัน <button class="btn amber" data-confirm="ลบรูปต้นฉบับของงานที่ปิดแล้วเกินจำนวนวันนี้? (เก็บ thumbnail)">2) Archive</button></form>
+  </div>
+  <div class="card tight"><h3>ตามเดือน</h3><table class="tbl"><tr><th>เดือน</th><th class="num">รูป</th><th class="num">MB</th></tr>{% for ym, n, b in by_month %}<tr><td>{{ ym|ym }}</td><td class="num">{{ n }}</td><td class="num">{{ (b/1048576)|round(1) }}</td></tr>{% endfor %}</table></div>
+</div>
+{% endblock %}

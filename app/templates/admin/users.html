@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_avatar.html" import avatar %}
+{% block pagetitle %}ผู้ใช้ & สิทธิ์{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="card" id="uform">
+  <div class="row between" style="margin-bottom:10px">
+    <h3 id="ftitle" style="margin:0">➕ เพิ่มผู้ใช้</h3>
+    <a href="/roles" class="btn sm ghost">🔐 ดูตารางสิทธิ์ของแต่ละบทบาท</a>
+  </div>
+  <form method="post" action="/admin/users" class="uform">
+    <input type="hidden" name="uid" id="uid" value="0">
+    <div class="field"><label>Username <span class="req">*</span></label><input name="username" id="f_username" required autocomplete="off" placeholder="เช่น somchai.p"></div>
+    <div class="field"><label>รหัสผ่าน</label><input name="password" type="password" id="f_password" autocomplete="new-password" placeholder="แก้ไข: ว่าง = ไม่เปลี่ยน"></div>
+    <div class="field span2"><label>ชื่อ-สกุล <span class="req">*</span></label><input name="full_name" id="f_full_name" required></div>
+    <div class="field"><label>บทบาท / สิทธิ์ <span class="req">*</span></label><select name="role" id="f_role">{% for r in ROLES %}{% if r != 'superadmin' or user.is_superadmin %}<option value="{{ r }}">{{ t('role_' ~ r) }}</option>{% endif %}{% endfor %}</select></div>
+    <div class="field"><label>รหัสพนักงาน</label><input name="emp_code" id="f_emp_code"></div>
+    <div class="field"><label>ตำแหน่ง</label><input name="position" id="f_position" placeholder="Leader / Foreman / Engineer"></div>
+    <div class="field"><label>แผนก</label><input name="department" id="f_department" placeholder="Production / Die / QC"></div>
+    <div class="field"><label>Line ประจำ</label><input name="line" id="f_line" list="lines" placeholder="ว่าง = ทุก Line"><datalist id="lines">{% for l in lines %}<option>{{ l }}</option>{% endfor %}</datalist></div>
+    <div class="field"><label>กะ</label><select name="shift" id="f_shift"><option value="">-</option><option>DAY</option><option>NIGHT</option><option>A</option><option>B</option></select></div>
+    <div class="field"><label>Email (รับแจ้งอนุมัติ)</label><input name="email" id="f_email" inputmode="email" placeholder="name@aapico.com"></div>
+    <div class="field"><label>โทร</label><input name="phone" id="f_phone" inputmode="tel"></div>
+    <div class="field span3"><label>Skills (ช่าง)</label><input name="skills" id="f_skills" placeholder="คั่นด้วย , เช่น เชื่อม, เจียร, Progressive, Draw"></div>
+    <div class="field"><label>สถานะ</label><select name="is_active" id="f_is_active"><option value="1">ใช้งาน</option><option value="0">ระงับ</option></select></div>
+    <div class="field span3 check-row"><label class="check"><input type="checkbox" name="must_change_pw" value="1" checked> บังคับตั้งรหัสใหม่เมื่อเข้าครั้งแรก (เมื่อกำหนดรหัสผ่าน)</label></div>
+    <div class="field btn-row"><button class="btn">💾 {{ t('save') }}</button><button type="button" class="btn ghost" onclick="resetForm()">ล้าง</button></div>
+  </form>
+  <div class="help">Line ประจำของ Foreman / QC ใช้เลือกว่าใครได้อีเมลอนุมัติของ Line ไหน (ว่าง = รับทุก Line) · Email ใช้ส่งแจ้งเตือนรายบุคคลทุกขั้นตอน</div>
+</div>
+
+<div class="card tight">
+  <div class="row" style="margin-bottom:10px;gap:8px">
+    <input id="usearch" placeholder="🔍 ค้นหาชื่อ / username / รหัส" style="flex:1;min-width:200px" oninput="filterUsers()">
+    <select id="urole" style="width:auto" onchange="filterUsers()"><option value="">ทุกบทบาท</option>{% for r in ROLES %}<option value="{{ r }}">{{ t('role_' ~ r) }}</option>{% endfor %}</select>
+    <span class="muted" id="ucount">{{ rows|length }} คน</span>
+    <span style="flex:1"></span>
+    <a href="/admin/export/users.xlsx" class="btn sm sec">⬇ Export Excel</a>
+    <a href="/admin/export/users_template.xlsx" class="btn sm sec">⬇ Template</a>
+    <form method="post" action="/admin/users/import" enctype="multipart/form-data" class="row" style="gap:6px"><input type="file" name="file" accept=".xlsx,.csv" required style="width:210px;padding:5px"><button class="btn sm">⬆ นำเข้า</button></form>
+    <form method="post" action="/admin/users/force-password"><button class="btn sm ghost" data-confirm="บังคับทุกคน (ยกเว้นคุณ) ตั้งรหัสใหม่?">🔐 บังคับทุกคนเปลี่ยนรหัส</button></form>
+  </div>
+  <div class="tbl-wrap"><table class="tbl responsive" id="utable">
+  <thead><tr><th>ชื่อ</th><th>บทบาท</th><th>Username</th><th>แผนก</th><th>Line</th><th>กะ</th><th>Email</th><th>เข้าใช้ล่าสุด</th><th></th></tr></thead><tbody>
+  {% for u in rows %}<tr data-role="{{ u.role }}" data-q="{{ (u.full_name ~ ' ' ~ u.username ~ ' ' ~ (u.emp_code or '') ~ ' ' ~ (u.email or ''))|lower }}" style="{{ 'opacity:.5' if not u.is_active }}">
+    <td data-l="ชื่อ"><div class="who">{{ avatar(u, 38) }}<div>{% if u.is_online %}<span class="dot" style="background:var(--green)" title="ออนไลน์"></span> {% endif %}<b>{{ u.full_name }}</b>{% if u.must_change_pw %} <span class="pill amber" title="ต้องตั้งรหัสใหม่">🔐</span>{% endif %}{% if u.password_hash == '!' %} <span class="pill gray">นำเข้า</span>{% endif %}<br><small class="muted">{{ u.position or '' }} {{ u.emp_code or '' }}</small></div></div></td>
+    <td data-l="บทบาท"><span class="pill blue">{{ t('role_' ~ u.role) }}</span></td>
+    <td data-l="Username">{{ u.username }}</td>
+    <td data-l="แผนก"><small>{{ u.department or '-' }}</small></td>
+    <td data-l="Line"><small>{{ u.line or 'ทุก Line' }}</small></td>
+    <td data-l="กะ"><small>{{ u.shift or '-' }}</small></td>
+    <td data-l="Email"><small>{{ u.email or '—' }}</small></td>
+    <td data-l="เข้าใช้ล่าสุด"><small>{{ u.last_login|dt }}</small></td>
+    <td style="white-space:nowrap"><form method="post" action="/admin/users/{{ u.id }}/photo" enctype="multipart/form-data" style="display:inline"><label class="btn sm ghost" title="อัปโหลดรูป">📷<input type="file" name="file" accept="image/*" hidden onchange="this.form.submit()"></label></form>{% if u.photo_path %}<form method="post" action="/admin/users/{{ u.id }}/photo/delete" style="display:inline"><button class="btn sm ghost" title="ลบรูป" data-confirm="ลบรูปของ {{ u.full_name }}?">✖</button></form>{% endif %} <button class="btn sm sec" onclick='edit({{ tojson({"id":u.id,"username":u.username,"full_name":u.full_name,"role":u.role,"emp_code":u.emp_code,"position":u.position,"department":u.department,"line":u.line,"shift":u.shift,"email":u.email,"phone":u.phone,"skills":u.skills,"is_active":u.is_active})|safe }})'>✏️ แก้ไข</button></td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="card" id="photos">
+  <h3>📸 รูปพนักงาน (แสดงบนจอ TV / ทีมช่าง / ผังผู้อนุมัติ)</h3>
+  <div class="grid g2" style="align-items:start">
+    <div><p style="margin-top:0">ทีละคน: กด 📷 ในตารางด้านบน · หรือพนักงานอัปโหลดเองที่หน้า <b>โปรไฟล์</b></p>
+      <p>ทีละหลายคน: รวมรูปเป็นไฟล์ <b>.zip</b> โดยตั้งชื่อไฟล์เป็น <code>username</code> หรือ <code>รหัสพนักงาน</code> เช่น <code>tech.a.jpg</code>, <code>10000004.png</code></p>
+      <form method="post" action="/admin/users/photos-zip" enctype="multipart/form-data" class="row"><input type="file" name="file" accept=".zip" required style="flex:1"><button class="btn">⬆ อัปโหลด ZIP</button></form></div>
+    <div class="help" style="line-height:1.8">ระบบตัดรูปเป็นสี่เหลี่ยม 320×320 (เน้นช่วงใบหน้า) ขนาด ~20 KB ต่อคน จึงไม่กินพื้นที่ host ฟรี<br>
+      รูปพนักงานรวมอยู่ในทุกไฟล์ Backup อัตโนมัติ · รองรับ JPG / PNG / HEIC (iPhone)<br>
+      ทีมช่างที่ยังไม่มีรูป: <b>{{ rows|selectattr('role','equalto','technician')|rejectattr('photo_path')|list|length }}</b> คน</div>
+  </div>
+</div>
+<style>
+.uform { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 0 14px; align-items:end; }
+.uform .field { margin-bottom: 12px; }
+.uform .span2 { grid-column: span 2; } .uform .span3 { grid-column: span 3; }
+.uform label { min-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uform .check-row { display:flex; align-items:center; min-height:44px; }
+.uform .check-row label { white-space: normal; }
+.uform .btn-row { display:flex; gap:8px; }
+.uform .btn-row .btn { flex:1; height:44px; }
+#utable td, #utable th { white-space: nowrap; }
+@media (max-width: 960px) { .uform { grid-template-columns: 1fr 1fr; } .uform .span3 { grid-column: span 2; } }
+@media (max-width: 560px) { .uform { grid-template-columns: 1fr; } .uform .span2, .uform .span3 { grid-column: auto; } #utable td { white-space: normal; } }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+function edit(u){ document.getElementById('ftitle').textContent='✏️ แก้ไข '+u.full_name; document.getElementById('uid').value=u.id;
+ for (const k of ['username','full_name','role','emp_code','position','department','line','shift','email','phone','skills']) { const el=document.getElementById('f_'+k); if(el) el.value=u[k]||''; }
+ document.getElementById('f_is_active').value=u.is_active?'1':'0'; document.getElementById('f_password').value=''; document.getElementById('uform').scrollIntoView({behavior:'smooth'}); }
+function resetForm(){ document.getElementById('ftitle').textContent='➕ เพิ่มผู้ใช้'; document.getElementById('uid').value=0; document.querySelectorAll('#uform input:not([type=checkbox])').forEach(i=>{ if(i.type!=='hidden') i.value=''; }); }
+function filterUsers(){ const q=document.getElementById('usearch').value.toLowerCase().trim(), r=document.getElementById('urole').value; let n=0;
+ document.querySelectorAll('#utable tbody tr').forEach(tr=>{ const ok=(!q||tr.dataset.q.includes(q))&&(!r||tr.dataset.role===r); tr.style.display=ok?'':'none'; if(ok)n++; });
+ document.getElementById('ucount').textContent=n+' คน'; }
+</script>
+{% endblock %}

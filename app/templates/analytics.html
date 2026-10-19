@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block pagetitle %}วิเคราะห์เชิงลึก — Die Maintenance{% endblock %}
+{% block content %}
+{% set h = a.head %}
+{% set qs = 'dfrom=' ~ dfrom ~ '&dto=' ~ dto ~ '&line=' ~ line ~ '&customer=' ~ customer ~ '&rtype=' ~ rtype %}
+<form class="card tight row" data-autosubmit>
+  <b>ช่วง</b><input type="date" name="dfrom" value="{{ dfrom }}" style="width:auto" onchange="this.form.submit()"><span>→</span><input type="date" name="dto" value="{{ dto }}" style="width:auto" onchange="this.form.submit()">
+  <select name="line" style="width:auto"><option value="">ทุก Line</option>{% for l in lines %}<option {{ 'selected' if l==line }}>{{ l }}</option>{% endfor %}</select>
+  <select name="customer" style="width:auto"><option value="">ทุกลูกค้า</option>{% for c in customers %}<option {{ 'selected' if c==customer }}>{{ c }}</option>{% endfor %}</select>
+  <select name="rtype" style="width:auto"><option value="">ทุกประเภท</option>{% for ty in REQUEST_TYPES %}<option value="{{ ty }}" {{ 'selected' if ty==rtype }}>{{ t('type_' ~ ty) }}</option>{% endfor %}</select>
+  <span class="muted">{{ a.n_rows }} ใบงาน</span><span style="flex:1"></span>
+  <a class="btn sm green" href="/analytics?{{ qs }}&fmt=xlsx">⬇ Excel (11 ชีต)</a>
+  <button type="button" class="btn sm sec" onclick="window.print()">🖨 พิมพ์ / PDF</button>
+</form>
+
+<div class="grid g6">
+  <a href="/requests?view=all&dfrom={{ dfrom }}&dto={{ dto }}&line={{ line }}&customer={{ customer }}&rtype={{ rtype }}" class="kpi"><div class="v">{{ h.jobs }}</div><div class="l">ใบงาน (ซ่อม {{ h.repairs }} · PM {{ h.pm }})</div></a>
+  <a href="#tech" class="kpi violet"><div class="v">{{ h.mttr_min|minutes if h.mttr_min else '-' }}</div><div class="l">MTTR เวลาซ่อมสุทธิเฉลี่ย</div></a>
+  <a href="#dies" class="kpi teal"><div class="v">{{ h.mtbf_days or '-' }}</div><div class="l">MTBF วันเฉลี่ยระหว่างเสีย</div></a>
+  <a href="#sla" class="kpi {{ 'green' if h.ontime_pct and h.ontime_pct >= 85 else 'amber' }}"><div class="v">{{ h.ontime_pct if h.ontime_pct is not none else '-' }}{% if h.ontime_pct is not none %}%{% endif %}</div><div class="l">ซ่อมเสร็จทันกำหนด</div></a>
+  <a href="#quality" class="kpi {{ 'green' if h.ftp_pct and h.ftp_pct >= 90 else 'amber' }}"><div class="v">{{ h.ftp_pct if h.ftp_pct is not none else '-' }}{% if h.ftp_pct is not none %}%{% endif %}</div><div class="l">ซ่อมผ่านในครั้งเดียว</div></a>
+  <a href="#dies" class="kpi red"><div class="v">{{ h.repeat_dies }}</div><div class="l">แม่พิมพ์ซ่อมซ้ำ ≥ 3 ครั้ง ({{ h.repeat_die_pct or 0 }}% ของงาน)</div></a>
+</div>
+
+<div class="card" style="margin-top:14px" id="insights">
+  <h3>💡 ข้อค้นพบอัตโนมัติ (อ่านจากข้อมูลช่วงที่เลือก)</h3>
+  {% for lvl, text, link in a.insights %}<a href="{{ link }}" class="alert {{ lvl }}" style="display:block;color:var(--text);margin-bottom:8px">{{ text }} <span class="muted">›</span></a>{% else %}<p class="muted">ข้อมูลยังไม่พอสำหรับการวิเคราะห์</p>{% endfor %}
+</div>
+
+<h2 style="margin:18px 0 8px">1. อะไรเสีย? <small class="muted">— Pareto 80/20</small></h2>
+<div class="grid g2" id="pareto">
+  <div class="card"><h3>⚠️ ปัญหาที่ Production แจ้ง</h3><div class="chart-box" style="height:300px"><canvas id="c_pp"></canvas></div></div>
+  <div class="card"><h3>🔬 สาเหตุที่ Die MT พบ</h3><div class="chart-box" style="height:300px"><canvas id="c_pc"></canvas></div></div>
+</div>
+<div class="card tight"><h3>🧩 ปัญหา × สาเหตุ <small class="muted">— อาการเดียวกันเกิดจากอะไรบ้าง (ยิ่งเข้มยิ่งบ่อย)</small></h3>
+  <div class="tbl-wrap"><table class="tbl heat"><thead><tr><th>ปัญหา \ สาเหตุ</th>{% for c in a.matrix.cols %}<th>{{ c }}</th>{% endfor %}</tr></thead><tbody>
+  {% for r in a.matrix.rows %}{% set ri = loop.index0 %}<tr><td><b>{{ r }}</b></td>{% for v in a.matrix.cells[ri] %}<td class="num" style="background:rgba(31,95,191,{{ (0.08 + 0.8 * v / a.matrix.max)|round(2) if v else 0 }});{{ 'color:#fff' if v > a.matrix.max*0.55 }}">{{ v or '' }}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div></div>
+
+<h2 style="margin:18px 0 8px" id="dies">2. แม่พิมพ์ไหนเสี่ยง? <small class="muted">— เป้าหมายแผน PM / แก้ที่ต้นเหตุ</small></h2>
+<div class="card tight"><div class="tbl-wrap"><table class="tbl responsive">
+  <thead><tr><th>#</th><th>แม่พิมพ์</th><th>ลูกค้า / Line</th><th class="num">ซ่อม</th><th class="num">MTBF (วัน)</th><th class="num" title="แจ้งซ่อมซ้ำภายใน 7 วันหลังซ่อมเสร็จ">ซ้ำใน 7 วัน</th><th class="num">ส่งกลับ/NG</th><th class="num">MTTR</th><th class="num">ต้นทุน ฿</th><th>ปัญหาหลัก</th><th class="num">Risk</th></tr></thead><tbody>
+  {% for d in a.dies %}<tr>
+    <td data-l="#">{{ loop.index }}</td>
+    <td data-l="แม่พิมพ์">{% if d.die_id %}<a href="/dies/{{ d.die_id }}"><b>{{ d.part_no }}</b></a>{% else %}<b>{{ d.part_no }}</b>{% endif %}<br><small class="muted">{{ d.process }}</small></td>
+    <td data-l="ลูกค้า">{{ d.customer or '-' }} / {{ d.line or '-' }}</td>
+    <td data-l="ซ่อม" class="num"><b>{{ d.repairs }}</b></td><td data-l="MTBF" class="num">{{ d.mtbf if d.mtbf is not none else '-' }}</td>
+    <td data-l="ซ้ำใน 7 วัน" class="num">{% if d.rep7 %}<span class="pill red">{{ d.rep7 }}</span>{% else %}-{% endif %}</td>
+    <td data-l="ส่งกลับ/NG" class="num">{{ d.ng or '-' }}</td><td data-l="MTTR" class="num">{{ d.mttr|minutes if d.mttr else '-' }}</td>
+    <td data-l="ต้นทุน" class="num">{{ d.cost|money if d.cost else '-' }}</td><td data-l="ปัญหาหลัก"><small>{{ d.top_problem }}</small></td>
+    <td data-l="Risk" class="num"><span class="pill {{ 'red' if d.risk >= 20 else 'amber' if d.risk >= 10 else 'gray' }}">{{ d.risk }}</span></td></tr>
+  {% else %}<tr><td colspan="11" class="muted">ไม่มีข้อมูล</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="help">Risk = ซ่อม×2 + ซ้ำใน 7 วัน×3 + ส่งกลับ/NG×2 + 5 ถ้า MTBF &lt; 14 วัน · "ซ้ำใน 7 วัน" สูง = การซ่อมไม่ถาวร</div></div>
+
+<h2 style="margin:18px 0 8px" id="stages">3. เวลาหายไปที่ไหน? <small class="muted">— Lead time แต่ละขั้น (median ชม.)</small></h2>
+<div class="grid g2">
+  <div class="card"><h3>⏱ ภาพรวมทุกขั้น</h3><div class="chart-box"><canvas id="c_stage"></canvas></div></div>
+  <div class="card"><h3>📆 แนวโน้มรายเดือน (ซ้อนกัน = เวลารวมต่อใบ)</h3><div class="chart-box"><canvas id="c_stage_m"></canvas></div></div>
+</div>
+<div class="grid g2" id="sla">
+  <div class="card tight"><h3>🎯 ทันกำหนดตามความเร่งด่วนที่แจ้ง</h3>
+    <table class="tbl"><thead><tr><th>Required day</th><th class="num">เป้า</th><th class="num">ใบงาน</th><th class="num">ทันกำหนด</th><th class="num">ใช้จริง (median)</th></tr></thead><tbody>
+    {% for s in a.sla_by_req %}<tr><td><a href="/requests?view=all&dfrom={{ dfrom }}&dto={{ dto }}&line={{ line }}">{{ {'<1':'< 1 วัน (ด่วน)','3':'3 วัน','5':'5 วัน','>7':'> 7 วัน'}[s.req] }}</a></td><td class="num">{{ s.target_h }} ชม.</td><td class="num">{{ s.n }}</td>
+      <td class="num">{% if s.ontime is not none %}<span class="pill {{ 'green' if s.ontime >= 85 else 'amber' if s.ontime >= 60 else 'red' }}">{{ s.ontime }}%</span>{% else %}-{% endif %}</td>
+      <td class="num">{{ s.actual_h if s.actual_h is not none else '-' }} ชม.</td></tr>{% endfor %}
+    </tbody></table><div class="help">ทันกำหนด = ช่างกดซ่อมเสร็จภายในวันที่ต้องการ</div></div>
+  <div class="card"><h3>📈 % ทันกำหนด และ % ผ่านครั้งเดียว รายเดือน</h3><div class="chart-box"><canvas id="c_pct"></canvas></div></div>
+</div>
+
+<h2 style="margin:18px 0 8px" id="quality">4. ซ่อมดีแค่ไหน? <small class="muted">— ถูกส่งกลับจาก Try-out / QC NG</small></h2>
+<div class="card tight"><table class="tbl"><thead><tr><th>สาเหตุ</th><th class="num">ใบงานที่ตัดสินแล้ว</th><th class="num">ถูกส่งกลับ</th><th class="num">%</th></tr></thead><tbody>
+  {% for c in a.ng_cause %}<tr><td>{{ c.name }}</td><td class="num">{{ c.n }}</td><td class="num">{{ c.ng }}</td><td class="num"><span class="pill {{ 'red' if c.pct >= 20 else 'amber' if c.pct >= 10 else 'green' }}">{{ c.pct }}%</span></td></tr>
+  {% else %}<tr><td colspan="4" class="muted">ยังไม่มีใบงานที่ถูกส่งกลับ (ข้อมูลเก่าจาก Power Apps ไม่ได้บันทึกการส่งกลับ — จะเริ่มมีเมื่อใช้ระบบใหม่)</td></tr>{% endfor %}
+</tbody></table></div>
+
+<h2 style="margin:18px 0 8px" id="tech">5. ใคร / เมื่อไร?</h2>
+<div class="grid g2">
+  <div class="card tight"><h3>👷 ช่าง Die</h3><div class="tbl-wrap"><table class="tbl responsive"><thead><tr><th>ช่าง</th><th class="num">งาน</th><th class="num">ปิด</th><th class="num">ค้าง</th><th class="num">เวลาซ่อม/คน</th><th class="num">รอรับงาน</th><th class="num">ผ่านครั้งเดียว</th></tr></thead><tbody>
+    {% for t_ in a.tech %}<tr><td data-l="ช่าง"><b>{{ t_.name }}</b></td><td data-l="งาน" class="num">{{ t_.jobs }}</td><td data-l="ปิด" class="num">{{ t_.closed }}</td><td data-l="ค้าง" class="num">{{ t_.open }}</td>
+      <td data-l="เวลาซ่อม" class="num">{{ t_.avg_net|minutes if t_.avg_net else '-' }}</td><td data-l="รอรับงาน" class="num">{{ t_.recv_h if t_.recv_h is not none else '-' }} ชม.</td>
+      <td data-l="ผ่านครั้งเดียว" class="num">{{ t_.ftp if t_.ftp is not none else '-' }}{% if t_.ftp is not none %}%{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div><div class="help">เวลาซ่อม/คน = เวลาซ่อมสุทธิหารจำนวนช่างในใบงาน · รอรับงาน = หัวหน้ามอบหมาย → ช่างกดรับ (median)</div></div>
+  <div class="card" id="when"><h3>🕐 ชั่วโมงที่แจ้งซ่อม (สีเข้ม = กะดึก)</h3><div class="chart-box"><canvas id="c_hour"></canvas></div>
+    <h3 style="margin-top:12px">📅 วันในสัปดาห์</h3><div class="chart-box" style="height:160px"><canvas id="c_wd"></canvas></div></div>
+</div>
+<div class="card tight"><h3>🏭 Line × เดือน <small class="muted">— Line ไหนแจ้งซ่อมพุ่งขึ้น</small></h3><div class="tbl-wrap"><table class="tbl heat">
+  <thead><tr><th>Line</th>{% for m in a.heat.cols %}<th>{{ m|ym }}</th>{% endfor %}</tr></thead><tbody>
+  {% for r in a.heat.rows %}{% set ri = loop.index0 %}<tr><td><a href="/requests?view=all&line={{ r }}&dfrom={{ dfrom }}&dto={{ dto }}"><b>{{ r }}</b></a></td>{% for v in a.heat.cells[ri] %}<td class="num" style="background:rgba(209,58,58,{{ (0.06 + 0.8 * v / a.heat.max)|round(2) if v else 0 }});{{ 'color:#fff' if v > a.heat.max*0.55 }}">{{ v or '' }}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div></div>
+
+<h2 style="margin:18px 0 8px" id="backlog">6. งานค้างตอนนี้อายุเท่าไร?</h2>
+<div class="grid g2">
+  <div class="card tight"><table class="tbl"><thead><tr><th>ค้างอยู่ที่</th>{% for l in a.age_labels %}<th class="num">{{ l }}</th>{% endfor %}<th class="num">รวม</th></tr></thead><tbody>
+    {% for g, vals in a.aging.items() %}<tr><td><b>{{ g }}</b></td>{% for v in vals %}<td class="num" style="{{ 'color:var(--red);font-weight:800' if v and loop.index >= 4 }}">{{ v or '-' }}</td>{% endfor %}<td class="num"><b>{{ vals|sum }}</b></td></tr>{% endfor %}
+  </tbody></table><div class="help"><a href="/requests?view=open&flag=overdue">ดูงานเกินกำหนด ›</a></div></div>
+  <div class="card" id="cost"><h3>📦 ปริมาณงาน และ 💰 ต้นทุนอะไหล่รายเดือน</h3><div class="chart-box"><canvas id="c_vol"></canvas></div></div>
+</div>
+<div class="grid g2" id="downtime">
+  <div class="card tight"><h3>🤝 ลูกค้า</h3><table class="tbl"><thead><tr><th>ลูกค้า</th><th class="num">ใบงาน</th><th class="num">MTTR</th></tr></thead><tbody>
+    {% for c in a.customers %}<tr><td><a href="/requests?view=all&customer={{ c.name }}&dfrom={{ dfrom }}&dto={{ dto }}">{{ c.name }}</a></td><td class="num">{{ c.n }}</td><td class="num">{{ c.mttr|minutes if c.mttr else '-' }}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card tight"><h3>⏸ Downtime เครื่องตาม Line</h3><table class="tbl"><thead><tr><th>Line</th><th class="num">Downtime</th></tr></thead><tbody>
+    {% for l, m in a.downtime_line %}<tr><td>{{ l }}</td><td class="num">{{ m|minutes if m else '-' }}</td></tr>{% endfor %}</tbody></table>
+    <div class="help">Downtime กรอกโดย Production ตอน Try-out — ข้อมูลเก่าจาก Power Apps ไม่มีค่านี้</div></div>
+</div>
+<style>.tbl.heat td,.tbl.heat th{white-space:nowrap;text-align:center}.tbl.heat td:first-child,.tbl.heat th:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+@media print{.card{break-inside:avoid}}</style>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/chart.umd.min.js"></script>
+<script>
+const A = {{ tojson(a)|safe }};
+const css = getComputedStyle(document.documentElement), acc = css.getPropertyValue('--accent').trim() || '#1f5fbf', line = css.getPropertyValue('--line').trim();
+Chart.defaults.font.family = css.getPropertyValue('--font'); Chart.defaults.color = css.getPropertyValue('--muted').trim();
+const cut = s => (s || '').length > 16 ? s.slice(0, 15) + '…' : s;
+function pareto(id, data, color) {
+  new Chart(document.getElementById(id), { data: { labels: data.map(d => cut(d.name)), datasets: [
+    { type: 'bar', label: 'จำนวน', data: data.map(d => d.n), backgroundColor: color, borderRadius: 5, yAxisID: 'y' },
+    { type: 'line', label: 'สะสม %', data: data.map(d => d.cum), borderColor: '#d13a3a', backgroundColor: '#d13a3a', yAxisID: 'y2', tension: .2, pointRadius: 3 }] },
+    options: { maintainAspectRatio: false, plugins: { tooltip: { callbacks: { title: i => data[i[0].dataIndex].name } } },
+      scales: { x: { ticks: { maxRotation: 60, minRotation: 40 }, grid: { display: false } }, y: { grid: { color: line } },
+        y2: { position: 'right', min: 0, max: 100, grid: { display: false }, ticks: { callback: v => v + '%' } } } } });
+}
+pareto('c_pp', A.pareto_problem, acc); pareto('c_pc', A.pareto_cause, '#6d45c7');
+const PAL = [acc, '#d13a3a', '#1d9a5b', '#c77d00', '#6d45c7', '#0f8a86'];
+new Chart(document.getElementById('c_stage'), { type: 'bar', data: { labels: A.stage_all.map(s => s.name), datasets: [{ data: A.stage_all.map(s => s.median_h), backgroundColor: PAL, borderRadius: 6 }] },
+  options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'ชั่วโมง (median)' }, grid: { color: line } }, y: { grid: { display: false } } } } });
+new Chart(document.getElementById('c_stage_m'), { type: 'bar', data: { labels: A.months.map(ym), datasets: A.stage_names.map((n, i) => ({ label: n, data: A.months.map(m => A.stage_month[m][i]), backgroundColor: PAL[i], stack: 's' })) },
+  options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, title: { display: true, text: 'ชม.' }, grid: { color: line } } } } });
+new Chart(document.getElementById('c_pct'), { type: 'line', data: { labels: A.months.map(ym), datasets: [
+  { label: 'ทันกำหนด %', data: A.ontime_month, borderColor: '#1d9a5b', tension: .3, spanGaps: true },
+  { label: 'ผ่านครั้งเดียว %', data: A.ftp_month, borderColor: acc, tension: .3, spanGaps: true }] },
+  options: { maintainAspectRatio: false, scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: line } }, x: { grid: { display: false } } } } });
+new Chart(document.getElementById('c_hour'), { type: 'bar', data: { labels: A.hours.map((_, i) => String(i).padStart(2, '0')), datasets: [{ data: A.hours, borderRadius: 4,
+  backgroundColor: A.hours.map((_, i) => (i >= 20 || i < 8) ? '#0f2c5c' : acc) }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: line } } } } });
+new Chart(document.getElementById('c_wd'), { type: 'bar', data: { labels: ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'], datasets: [{ data: A.weekday, backgroundColor: '#0f8a86', borderRadius: 4 }] },
+  options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: line } } } } });
+new Chart(document.getElementById('c_vol'), { data: { labels: A.months.map(ym), datasets: [
+  { type: 'bar', label: 'ซ่อม', data: A.vol_month.map(v => v.repair), backgroundColor: acc, stack: 'v', borderRadius: 4 },
+  { type: 'bar', label: 'PM', data: A.vol_month.map(v => v.pm), backgroundColor: '#1d9a5b', stack: 'v' },
+  { type: 'line', label: 'ต้นทุนอะไหล่ ฿', data: A.cost_month, borderColor: '#c77d00', yAxisID: 'y2', tension: .3 }] },
+  options: { maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grid: { color: line } }, y2: { position: 'right', grid: { display: false } } } } });
+</script>
+{% endblock %}

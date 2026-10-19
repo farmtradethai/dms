@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block pagetitle %}ปฏิทิน PM{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+{% set TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'] %}
+<div class="card tight">
+  <div class="row between">
+    <div class="row"><a class="btn sm sec" href="?ym={{ prev }}">‹</a><h3 style="margin:0;min-width:190px;text-align:center">{{ TH[m-1] }} {{ y }}</h3><a class="btn sm sec" href="?ym={{ nxt }}">›</a>
+      <a class="btn sm ghost" href="/pm/calendar">เดือนนี้</a></div>
+    <div class="row" style="gap:12px;font-size:.82rem"><span><span class="cal-dot plan"></span> แผน (คาดการณ์)</span><span><span class="cal-dot cjob"></span> ใบงาน PM เปิดอยู่</span><span><span class="cal-dot done"></span> PM เสร็จแล้ว</span><span><span class="cal-dot late"></span> เกินกำหนด</span>
+      <b>แผน {{ cal.n_plan }} · ใบงาน {{ cal.n_jobs }}</b></div>
+  </div>
+</div>
+<div class="cal">
+  {% for wd in ['จ.','อ.','พ.','พฤ.','ศ.','ส.','อา.'] %}<div class="cal-h">{{ wd }}</div>{% endfor %}
+  {% for w in cal.weeks %}{% for c in w %}
+    {% set job_dies = c.jobs|map(attribute='die_id')|list %}
+    <div class="cal-c {{ '' if c.in else 'out' }} {{ 'today' if c.date == today }}">
+      <div class="cal-d">{{ c.date.day }}</div>
+      {% for r in c.jobs[:6] %}<a class="cal-e {{ 'done' if r.status == 'CLOSED' else ('late' if r.is_overdue else 'cjob') }}" href="/requests/{{ r.id }}" title="{{ r.dr_no }} · {{ r.part_no }} {{ r.die_process }} · {{ st(r.status) }}">{{ r.part_no }}</a>{% endfor %}
+      {% for d in c.plan if d.id not in job_dies %}{% if loop.index <= 6 %}<a class="cal-e {{ 'late' if c.date < today else 'plan' }}" href="/dies/{{ d.id }}#pm" title="{{ d.part_no }} {{ d.die_process }} · {{ d.line or '' }}">{{ d.part_no }}</a>{% endif %}{% endfor %}
+      {% set more = c.jobs|length + c.plan|length - 12 %}{% if more > 0 %}<small class="muted">+{{ more }}</small>{% endif %}
+    </div>
+  {% endfor %}{% endfor %}
+</div>
+<p class="help">แผนคาดการณ์จากรอบ PM (วัน) ของแต่ละแม่พิมพ์ · แม่พิมพ์ที่ PM ตาม Stroke ดูที่ <a href="/pm">ต้อง PM</a> / <a href="/pm/strokes">บันทึก Stroke</a></p>
+<style>
+.cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin-top:12px; }
+.cal-h { text-align:center; font-weight:700; color:var(--muted); font-size:.8rem; }
+.cal-c { background:var(--card); border-radius:10px; min-height:96px; padding:6px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:3px; min-width:0; }
+.cal-c.out { opacity:.45; } .cal-c.today { outline:2px solid var(--accent); }
+.cal-d { font-weight:800; font-size:.85rem; }
+.cal-e { display:block; font-size:.72rem; padding:2px 6px; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.cal-e:hover { text-decoration:none; filter:brightness(.95); }
+.cal-e.plan { background:var(--blue-bg); } .cal-e.cjob { background:var(--violet-bg); } .cal-e.done { background:var(--green-bg); } .cal-e.late { background:var(--red-bg); color:var(--red); font-weight:700; }
+.cal-dot { display:inline-block; width:10px; height:10px; border-radius:3px; vertical-align:middle; }
+.cal-dot.plan { background:var(--blue-bg); border:1px solid var(--blue); } .cal-dot.cjob { background:var(--violet-bg); border:1px solid var(--violet); } .cal-dot.done { background:var(--green-bg); border:1px solid var(--green); } .cal-dot.late { background:var(--red-bg); border:1px solid var(--red); }
+@media (max-width:760px) { .cal { gap:3px; } .cal-c { min-height:64px; padding:3px; } .cal-e { font-size:.6rem; padding:1px 3px; } }
+</style>
+{% endblock %}

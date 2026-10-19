@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block pagetitle %}บริษัท{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="grid g2" style="align-items:start">
+<div class="card"><h3>➕ เพิ่ม / แก้ไขบริษัท</h3>
+  <form method="post" action="/admin/companies" class="grid g2" id="cf">
+    <input type="hidden" name="cid" id="cid" value="0">
+    <div class="field"><label>รหัส (เช่น AH, AHR, AHD, AL)</label><input name="code" id="f_code" required></div>
+    <div class="field"><label>ชื่อ</label><input name="name" id="f_name" required></div>
+    <div class="field"><label>Prefix เลขใบงาน</label><input name="dr_prefix" id="f_dr_prefix" value="DR"></div>
+    <div class="field"><label>รูปแบบ</label><select name="dr_style" id="f_dr_style"><option value="running">ต่อเนื่อง (AHMD05001)</option><option value="monthly">รายเดือน (DR-2610-001)</option></select></div>
+    <div class="field"><label>Logo text</label><input name="logo_text" id="f_logo_text" value="AAPICO"></div>
+    <div class="field"><label>สถานะ</label><select name="is_active" id="f_is_active"><option value="1">ใช้งาน</option><option value="0">ปิด</option></select></div>
+    <div class="field newonly"><label>Master ปัญหา/สาเหตุเริ่มต้น</label><select name="masters"><option value="default">ใช้ชุดมาตรฐาน (จาก AH) แล้วแก้ทีหลัง</option><option value="empty">ว่าง — นำเข้าจาก Template เอง</option></select></div>
+    <div class="field newonly"></div>
+    <div class="field newonly"><label>Admin ของบริษัท: username</label><input name="admin_username" placeholder="เช่น admin.ahr" autocomplete="off"></div>
+    <div class="field newonly"><label>ชื่อ Admin</label><input name="admin_name" placeholder="ชื่อ-สกุล"></div>
+    <div class="field newonly"><label>รหัสผ่านเริ่มต้น</label><input name="admin_password" type="password" autocomplete="new-password" placeholder="บังคับเปลี่ยนเมื่อเข้าครั้งแรก"></div>
+    <div class="field"><button class="btn">{{ t('save') }}</button></div>
+  </form>
+  <div class="alert info" style="font-size:.85rem">บริษัทใหม่: กดบันทึกแล้วระบบพาไปหน้า <b>🚀 เริ่มต้นบริษัท</b> ทันที — ดาวน์โหลด Template ข้อมูลตั้งต้น กรอก อัปโหลด และดูรายการที่ยังขาดก่อนใช้งานจริง</div>
+  <div class="help" style="margin-bottom:6px">ย้าย host / กู้ระบบ? ไปที่ <a href="/admin/backup">Backup › กู้คืน</a> แทนการสร้างใหม่</div>
+  <div class="help">บริษัทใหม่จะได้ Master ปัญหา/สาเหตุชุดเริ่มต้น (จาก AH) อัตโนมัติ ข้อมูลทุกบริษัทแยกกันสิ้นเชิง — Superadmin สลับบริษัทได้ที่แถบบน</div>
+</div>
+<div class="card tight"><table class="tbl"><tr><th>รหัส</th><th>ชื่อ</th><th>Prefix</th><th>เลขล่าสุด</th><th>ผู้ใช้</th><th></th></tr>
+{% for c in rows %}<tr><td><b>{{ c.code }}</b></td><td>{{ c.name }}</td><td>{{ c.dr_prefix }} ({{ c.dr_style }})</td><td>{{ c.dr_seq }}</td><td>{{ c.users|length }}</td>
+<td><button class="btn sm sec" onclick='e({{ tojson({"id":c.id,"code":c.code,"name":c.name,"dr_prefix":c.dr_prefix,"dr_style":c.dr_style,"logo_text":c.logo_text,"is_active":c.is_active})|safe }})'>✏️</button></td></tr>{% endfor %}</table></div>
+</div>
+{% endblock %}
+{% block scripts %}<script>function e(c){document.querySelectorAll('.newonly').forEach(x=>x.style.display='none');document.getElementById('cid').value=c.id;for(const k of ['code','name','dr_prefix','dr_style','logo_text'])document.getElementById('f_'+k).value=c[k]||'';document.getElementById('f_is_active').value=c.is_active?'1':'0';}</script>{% endblock %}

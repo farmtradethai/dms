@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_dashboard') }}{% endblock %}
+{% block content %}
+<form class="card tight row" data-autosubmit>
+  <b>ช่วงวันที่</b><input type="date" name="dfrom" value="{{ dfrom }}" style="width:auto" onchange="this.form.submit()"><input type="date" name="dto" value="{{ dto }}" style="width:auto" onchange="this.form.submit()">
+  <a href="/reports?dfrom={{ dfrom }}&dto={{ dto }}&fmt=xlsx" class="btn sm sec">⬇ Excel</a><a href="/reports?dfrom={{ dfrom }}&dto={{ dto }}&fmt=pdf" class="btn sm sec">⬇ PDF</a>
+  <button type="button" class="btn sm sec" onclick="window.print()">🖼 พิมพ์/บันทึกภาพ</button><a href="/tv" class="btn sm">📺 TV</a>
+</form>
+<div class="grid g6">
+  <a href="/requests?view=all&dfrom={{ dfrom }}&dto={{ dto }}" class="kpi"><div class="v">{{ s.total }}</div><div class="l">งานทั้งหมด (ช่วงที่เลือก)</div></a>
+  <a href="/requests?view=closed&status=CLOSED&dfrom={{ dfrom }}&dto={{ dto }}" class="kpi green"><div class="v">{{ s.closed }}</div><div class="l">ปิดงาน</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#tech" class="kpi violet"><div class="v">{{ s.mttr_text }}</div><div class="l">MTTR (เวลาซ่อมสุทธิเฉลี่ย)</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#dies" class="kpi teal"><div class="v">{{ s.mtbf_days or '-' }}</div><div class="l">MTBF (วัน/แม่พิมพ์)</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#stages" class="kpi amber"><div class="v">{{ s.lead_to_repair_done_h or '-' }} <small style="font-size:.9rem">ชม.</small></div><div class="l">Repair Lead Time (median ถึงซ่อมเสร็จ)</div></a>
+  <a href="/pm" class="kpi blue"><div class="v">{{ s.pm_achievement if s.pm_achievement is not none else '-' }}{% if s.pm_achievement is not none %}%{% endif %}</div><div class="l">PM Achievement ({{ s.pm_jobs }} งาน)</div></a>
+</div>
+<div class="grid g6" style="margin-top:12px">
+  <a href="/requests?view=open&flag=emergency" class="kpi red"><div class="v">{{ s.emergency_open }}</div><div class="l">งานด่วนค้าง</div></a>
+  <a href="/requests?view=open&flag=overdue" class="kpi red"><div class="v">{{ s.overdue_open }}</div><div class="l">เกินกำหนด</div></a>
+  <a href="/requests?view=all&flag=ng&dfrom={{ dfrom }}&dto={{ dto }}" class="kpi"><div class="v">{{ s.ng_total }}</div><div class="l">QC NG รวม</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#cost" class="kpi amber"><div class="v">{{ s.parts_cost|money }}</div><div class="l">ต้นทุนอะไหล่ ฿</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#downtime" class="kpi"><div class="v">{{ s.downtime_minutes|minutes }}</div><div class="l">Downtime รวม</div></a>
+  <a href="/analytics?dfrom={{ dfrom }}&dto={{ dto }}#stages" class="kpi teal"><div class="v">{{ s.lead_total_h or '-' }} <small style="font-size:.9rem">ชม.</small></div><div class="l">Lead time ถึงปิดงาน (median)</div></a>
+</div>
+
+<div class="grid g2" style="margin-top:14px">
+  <div class="card"><h3>📈 แนวโน้มรายเดือน — จำนวนงาน & MTTR</h3><div class="chart-box"><canvas id="c_month"></canvas></div></div>
+  <div class="card"><h3>⏱ Lead time แต่ละขั้น (median ชม.) — หาคอขวด</h3><div class="chart-box"><canvas id="c_stage"></canvas></div></div>
+  <div class="card"><h3>🔧 Top ปัญหา (Production แจ้ง)</h3><div class="chart-box"><canvas id="c_problem"></canvas></div></div>
+  <div class="card"><h3>🧪 Top สาเหตุ (Die MT วิเคราะห์)</h3><div class="chart-box"><canvas id="c_cause"></canvas></div></div>
+  <div class="card"><h3>🏭 ตาม Line / ลูกค้า</h3><div class="chart-box"><canvas id="c_line"></canvas></div></div>
+  <div class="card"><h3>🧰 Top 10 แม่พิมพ์ที่ซ่อมบ่อย</h3><div class="chart-box"><canvas id="c_die"></canvas></div></div>
+  <div class="card"><h3>💰 ต้นทุนอะไหล่ต่อแม่พิมพ์</h3><div class="chart-box"><canvas id="c_cost"></canvas></div></div>
+  <div class="card"><h3>👷 ภาระงานช่าง</h3>
+    <table class="tbl"><tr><th>ช่าง</th><th class="num">งาน</th><th class="num">ค้าง</th><th class="num">เวลาซ่อมรวม</th></tr>
+    {% for name, v in b.technicians %}<tr><td>{{ name }}</td><td class="num">{{ v.jobs }}</td><td class="num">{{ v.open }}</td><td class="num">{{ v.net|minutes }}</td></tr>{% endfor %}</table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/chart.umd.min.js"></script>
+<script>
+const B = {{ tojson(b)|safe }}, S = {{ tojson(s)|safe }};
+const css = getComputedStyle(document.documentElement), acc = css.getPropertyValue('--accent').trim() || '#1f5fbf';
+const PAL = [acc, '#d13a3a', '#1d9a5b', '#c77d00', '#6d45c7', '#0f8a86', '#6b7686', '#e06ba0'];
+Chart.defaults.font.family = css.getPropertyValue('--font'); Chart.defaults.color = css.getPropertyValue('--muted').trim();
+const bar = (id, labels, data, color, horizontal, label) => new Chart(document.getElementById(id), { type: 'bar', data: { labels, datasets: [{ label: label || '', data, backgroundColor: color, borderRadius: 6 }] },
+  options: { indexAxis: horizontal ? 'y' : 'x', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: css.getPropertyValue('--line') } } } } });
+new Chart(document.getElementById('c_month'), { type: 'bar', data: { labels: B.months.map(m => ym(m.month)), datasets: [
+  { type: 'bar', label: 'ซ่อม', data: B.months.map(m => m.repair), backgroundColor: acc, stack: 'a', borderRadius: 4 },
+  { type: 'bar', label: 'PM', data: B.months.map(m => m.pm), backgroundColor: '#1d9a5b', stack: 'a', borderRadius: 4 },
+  { type: 'bar', label: 'Accident', data: B.months.map(m => m.accident), backgroundColor: '#d13a3a', stack: 'a' },
+  { type: 'line', label: 'MTTR (นาที)', data: B.months.map(m => m.mttr), borderColor: '#c77d00', yAxisID: 'y2', tension: .3 },
+  { type: 'line', label: 'QC NG', data: B.months.map(m => m.ng), borderColor: '#6d45c7', yAxisID: 'y2', borderDash: [4, 3], tension: .3 }] },
+  options: { maintainAspectRatio: false, scales: { y: { stacked: true }, y2: { position: 'right', grid: { display: false } } } } });
+bar('c_stage', ['แจ้ง→Foreman', 'Foreman→หัวหน้า Die', 'หัวหน้า→ช่างรับ', 'รับ→ซ่อมเสร็จ', 'เสร็จ→Try-out', 'Try-out→QC'],
+  [S.lead_req_to_foreman_h, S.lead_foreman_to_leader_h, S.lead_leader_to_receive_h, S.lead_receive_to_complete_h, S.lead_complete_to_tryout_h, S.lead_tryout_to_qc_h], PAL, false, 'ชม.');
+bar('c_problem', B.by_problem.slice(0, 10).map(x => x[0]), B.by_problem.slice(0, 10).map(x => x[1]), acc, true);
+bar('c_cause', B.by_root_cause.slice(0, 10).map(x => x[0]), B.by_root_cause.slice(0, 10).map(x => x[1]), '#6d45c7', true);
+new Chart(document.getElementById('c_line'), { type: 'doughnut', data: { labels: B.by_line.map(x => x[0]), datasets: [{ data: B.by_line.map(x => x[1]), backgroundColor: PAL }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+bar('c_die', B.by_die.slice(0, 10).map(x => x[0]), B.by_die.slice(0, 10).map(x => x[1]), '#0f8a86', true);
+bar('c_cost', B.cost_by_die.slice(0, 10).map(x => x[0]), B.cost_by_die.slice(0, 10).map(x => x[1]), '#c77d00', true);
+</script>
+{% endblock %}

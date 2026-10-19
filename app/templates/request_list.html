@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_requests') }}{% endblock %}
+{% block content %}
+{% set qs = 'q=' ~ q ~ '&rtype=' ~ rtype ~ '&line=' ~ line ~ '&customer=' ~ customer ~ '&dfrom=' ~ dfrom ~ '&dto=' ~ dto %}
+<div class="tabs">
+  <a href="/requests?view=approve" class="{{ 'active' if view=='approve' }}">✅ {{ t('menu_approve') if sees_all else 'รอฉันดำเนินการ' }}</a>
+  {% if sees_all %}<a href="/requests?view=mine" class="{{ 'active' if view=='mine' }}">👤 {{ t('menu_my_jobs') }}</a>{% endif %}
+  <a href="/requests?view=open" class="{{ 'active' if view=='open' }}">⏳ {{ t('kpi_open') }}</a>
+  <a href="/requests?view=closed" class="{{ 'active' if view=='closed' }}">✔ {{ st('CLOSED') }}</a>
+  <a href="/requests?view=all" class="{{ 'active' if view=='all' }}">📚 {{ t('all') }}</a>
+</div>
+{% if not sees_all %}<div class="alert info" style="padding:8px 12px">{{ 'แสดงเฉพาะใบงานที่คุณเป็นผู้แจ้ง' if user.role != 'technician' else 'แสดงเฉพาะงานที่คุณได้รับมอบหมาย' }} · <a href="/roles">ดูสิทธิ์</a></div>{% endif %}
+<div class="card tight">
+  <div class="row" style="gap:6px">
+    <b style="font-size:.85rem">กรองสถานะ:</b>
+    <a class="chip {{ 'on' if not status and not flag }}" href="/requests?view={{ view }}&{{ qs }}">ทั้งหมด <b>{{ status_counts.values()|sum }}</b></a>
+    {% for s in ['WAIT_FOREMAN','WAIT_LEADER','ASSIGNED','IN_PROGRESS','REPAIR_DONE','RETURNED','NG_RETURN','WAIT_QC','FOREMAN_REJECTED','LEADER_REJECTED','CLOSED','CANCELLED'] %}
+      {% if status_counts.get(s) %}<a class="chip {{ STATUS_COLORS[s] }} {{ 'on' if s in status.split(',') }}" href="/requests?view={{ view }}&status={{ s }}&{{ qs }}">{{ st(s) }} <b>{{ status_counts[s] }}</b></a>{% endif %}
+    {% endfor %}
+    <span style="flex:1"></span>
+    <a class="chip red {{ 'on' if flag=='emergency' }}" href="/requests?view={{ view }}&flag=emergency&{{ qs }}">🔥 ด่วน</a>
+    <a class="chip red {{ 'on' if flag=='overdue' }}" href="/requests?view={{ view }}&flag=overdue&{{ qs }}">⏰ เกินกำหนด</a>
+    <a class="chip violet {{ 'on' if flag=='ng' }}" href="/requests?view={{ view }}&flag=ng&{{ qs }}">↩ เคย NG</a>
+    <a class="chip {{ 'on' if flag=='today' }}" href="/requests?view={{ view }}&flag=today&{{ qs }}">📅 วันนี้</a>
+  </div>
+</div>
+<form class="card tight" data-autosubmit>
+  <input type="hidden" name="view" value="{{ view }}"><input type="hidden" name="flag" value="{{ flag }}">
+  <div class="row">
+    <input name="q" value="{{ q }}" placeholder="🔍 DR No / Part / Die Code / ปัญหา" style="flex:2;min-width:180px">
+    <select name="status" style="width:auto"><option value="">{{ t('status') }}: {{ t('all') }}</option>{% for s in ST.values() %}<option value="{{ s }}" {{ 'selected' if status==s }}>{{ st(s) }}</option>{% endfor %}</select>
+    <select name="rtype" style="width:auto"><option value="">{{ t('request_type') }}</option>{% for ty in REQUEST_TYPES %}<option value="{{ ty }}" {{ 'selected' if rtype==ty }}>{{ t('type_' ~ ty) }}</option>{% endfor %}</select>
+    <select name="line" style="width:auto"><option value="">{{ t('line') }}</option>{% for l in lines %}<option {{ 'selected' if line==l }}>{{ l }}</option>{% endfor %}</select>
+    <select name="customer" style="width:auto"><option value="">{{ t('customer') }}</option>{% for c in customers %}<option {{ 'selected' if customer==c }}>{{ c }}</option>{% endfor %}</select>
+    <input type="date" name="dfrom" value="{{ dfrom }}" style="width:auto" title="ตั้งแต่"><input type="date" name="dto" value="{{ dto }}" style="width:auto" title="ถึง">
+    <button class="btn sm">{{ t('search') }}</button>
+    <span class="muted">{{ total }} รายการ</span>
+    {% if allowed('reports') %}<a class="btn sm sec" href="/reports?dfrom={{ dfrom }}&dto={{ dto }}&rtype={{ rtype }}&line={{ line }}&customer={{ customer }}&status={{ status }}&fmt=xlsx">⬇ Excel</a>{% endif %}
+    {% if allowed('print_batch') and (view=='closed' or status=='CLOSED') %}<a class="btn sm" target="_blank" href="/requests/print?view={{ view }}&status={{ status }}&flag={{ flag }}&{{ qs }}">🖨 พิมพ์ใบที่ปิดแล้ว ({{ total }})</a>{% endif %}
+  </div>
+</form>
+<div class="list-cards">
+{% for r in rows %}
+  <a class="job {{ 'emergency' if r.is_emergency }} {{ 'overdue' if r.is_overdue }}" href="/requests/{{ r.id }}">
+    <div>
+      <div class="dr">{{ r.dr_no }}{% if r.legacy_id and r.legacy_id != r.dr_no %} <small class="muted">({{ r.legacy_id }})</small>{% endif %}
+        <span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span>
+        {% if r.is_emergency %}<span class="pill red">🔥</span>{% endif %}
+        {% if r.request_type != 'REPAIR' %}<span class="pill violet">{{ t('type_' ~ r.request_type) }}</span>{% endif %}
+        {% if r.is_overdue %}<span class="pill red">⏰ {{ t('kpi_overdue') }}</span>{% endif %}</div>
+      <div>{{ r.part_no }} · {{ r.die_process }} <span class="tag">{{ r.line or '-' }}</span> <span class="tag">{{ r.customer or '-' }}</span></div>
+      <div class="meta">{{ r.problem_text }} · {{ r.requester_name }}{% if r.technician_names %} · 👷 {{ r.technician_names }}{% endif %}{% if r.progress_pct and r.is_open %} · {{ r.progress_pct }}%{% endif %}</div>
+    </div>
+    <div class="muted" style="font-size:.8rem;text-align:right">{{ r.created_at|dt }}<br>{{ t('target_date') }} {{ r.target_date|d }}</div>
+  </a>
+{% else %}<div class="card muted">ไม่พบรายการ</div>{% endfor %}
+</div>
+{% if pages > 1 %}
+<div class="row" style="margin-top:12px;justify-content:center">
+  {% for p in range(1, pages+1) %}{% if p==page %}<b class="tag">{{ p }}</b>{% elif p<=3 or p>pages-3 or (p>=page-2 and p<=page+2) %}<a class="tag" href="?view={{ view }}&status={{ status }}&flag={{ flag }}&{{ qs }}&page={{ p }}">{{ p }}</a>{% endif %}{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block pagetitle %}นำเข้าข้อมูล{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<div class="grid g2" style="align-items:start">
+<div class="card"><h3>🧰 1) ทะเบียนแม่พิมพ์</h3>
+  <p>รองรับไฟล์ <b>DieProductionProcessList.csv</b> จาก Power Apps โดยตรง (คอลัมน์ Company, Customer, Model, PartNo, PartName, DieProcess, DieCode, Line) หรือ Excel หัวคอลัมน์เดียวกัน เพิ่มคอลัมน์ <code>PM Interval Days</code> ได้</p>
+  <form method="post" action="/admin/import/dies" enctype="multipart/form-data" class="row"><input type="file" name="file" accept=".csv,.xlsx" required style="flex:1"><button class="btn">นำเข้า</button></form>
+  <div class="help">แถวที่ Part No + Process ซ้ำจะอัปเดตข้อมูลแทนการเพิ่มซ้ำ · ชื่อลูกค้า/Line ถูก trim ช่องว่างอัตโนมัติ</div>
+</div>
+<div class="card"><h3>📜 2) ข้อมูลเก่า (ใบแจ้งซ่อมย้อนหลัง)</h3>
+  <p>อัปโหลด <b>DieRepairList.csv</b> ที่ Export จาก Power Apps ได้ทันที หรือใช้ <a href="/admin/import/template.xlsx">Template Excel</a> สำหรับหัวหน้างานกรอกย้อนหลัง</p>
+  <form method="post" action="/admin/import/requests" enctype="multipart/form-data" class="row"><input type="file" name="file" accept=".csv,.xlsx" required style="flex:1"><button class="btn green">นำเข้า</button></form>
+  <ul class="help" style="line-height:1.8;padding-left:18px;margin-top:8px">
+    <li>คง Legacy ID (AHMDxxxxx) เป็นเลข DR เดิม ค้นหา/สแกนได้</li><li>Line "LIne3"→"Line3", ตัดช่องว่าง, แปลงวันที่ MM/DD/YYYY</li>
+    <li>สถานะ Power Apps → สถานะใหม่ (Waiting Line Leader Accepted → รอ Try-out ฯลฯ)</li>
+    <li>อ่านช่วงเวลา "20.00-22.00" ท้ายช่อง HowToFix → เวลาซ่อมสุทธิ ใช้คำนวณ MTTR ย้อนหลัง</li>
+    <li>ชื่อช่างที่ยังไม่มีบัญชี จะสร้างเป็นผู้ใช้ (ระงับ) ให้ผูกประวัติได้ — เปิดใช้และตั้งรหัสผ่านทีหลังที่หน้าผู้ใช้</li>
+    <li>Legacy ID ซ้ำจะถูกข้าม จึงอัปโหลดซ้ำเพื่อเติมงานใหม่ได้ (ไฟล์ 3,000 แถวใช้เวลา ~1 นาที)</li></ul>
+  <div class="alert info" style="margin-top:10px">ต้องการ <b>ลบ</b> ใบงานเก่าทั้งหมดเพื่อเริ่มใหม่? ใช้เมนู <a href="/admin/purge">🧹 ล้างใบงานเก่า</a> (Backup ให้อัตโนมัติก่อนลบ)</div>
+  <hr><h3>🧹 3) ปิดงานเก่าที่ค้าง</h3>
+  <p class="muted">ใน Power Apps มีงานที่ซ่อมเสร็จแล้วแต่ Production/QC ไม่เคยกดรับหลายร้อยรายการ — ปิดเป็นชุดเพื่อให้ "งานค้าง" บน Dashboard สะท้อนความจริง (มีบันทึกใน Audit/ประวัติทุกใบ)</p>
+  <form method="post" action="/admin/import/close-stale" class="row"><span>ปิดงานนำเข้าที่ค้าง Try-out/QC เกิน</span><input type="number" name="days" value="60" style="width:90px"><span>วัน</span><button class="btn amber" data-confirm="ปิดงานเก่าที่ค้างทั้งหมด?">ปิดงานเก่า</button></form>
+</div>
+</div>
+{% endblock %}

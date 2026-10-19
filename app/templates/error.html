@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block pagetitle %}Error {{ code }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+  <h2>{{ code }}</h2>
+  <p>{{ detail }}</p>
+  <a href="javascript:history.back()" class="btn sec">{{ t('back') }}</a> <a href="/" class="btn">{{ t('home') }}</a>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block pagetitle %}Master data{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+{% macro simple(kind, title, rows) %}
+<div class="card tight"><h3>{{ title }} <small class="muted">({{ rows|length }})</small></h3>
+  <form method="post" action="/admin/masters/{{ kind }}" class="row" style="margin-bottom:8px"><input name="name" placeholder="เพิ่มใหม่…" required style="flex:1"><button class="btn sm">+</button></form>
+  <div style="max-height:380px;overflow:auto">
+  {% for r in rows %}<form method="post" action="/admin/masters/{{ kind }}" class="row" style="padding:3px 0;border-bottom:1px solid var(--line)">
+    <input type="hidden" name="mid" value="{{ r.id }}"><input name="name" value="{{ r.name }}" style="flex:1;padding:5px 8px">
+    <select name="is_active" style="width:auto;padding:5px"><option value="1" {{ 'selected' if r.is_active }}>ใช้</option><option value="0" {{ 'selected' if not r.is_active }}>ซ่อน</option></select>
+    <button class="btn sm sec">💾</button><button class="btn sm ghost" name="delete" value="1" data-confirm="ลบ {{ r.name }}?">🗑</button></form>{% endfor %}</div></div>
+{% endmacro %}
+{% macro bilingual(kind, title, rows) %}
+<div class="card tight"><h3>{{ title }} <small class="muted">({{ rows|length }})</small></h3>
+  <form method="post" action="/admin/masters/{{ kind }}" class="row" style="margin-bottom:8px"><input name="name" placeholder="ชื่อ (ไทย)…" required style="flex:1"><input name="name_en" placeholder="English" style="flex:1"><input name="sort" type="number" value="50" style="width:70px"><button class="btn sm">+</button></form>
+  <div style="max-height:380px;overflow:auto">
+  {% for r in rows %}<form method="post" action="/admin/masters/{{ kind }}" class="row" style="padding:3px 0;border-bottom:1px solid var(--line)">
+    <input type="hidden" name="mid" value="{{ r.id }}"><input name="name" value="{{ r.name_th }}" style="flex:1;padding:5px 8px"><input name="name_en" value="{{ r.name_en or '' }}" style="flex:1;padding:5px 8px"><input name="sort" type="number" value="{{ r.sort }}" style="width:60px;padding:5px">
+    <select name="is_active" style="width:auto;padding:5px"><option value="1" {{ 'selected' if r.is_active }}>ใช้</option><option value="0" {{ 'selected' if not r.is_active }}>ซ่อน</option></select>
+    <button class="btn sm sec">💾</button><button class="btn sm ghost" name="delete" value="1" data-confirm="ลบ?">🗑</button></form>{% endfor %}</div></div>
+{% endmacro %}
+<div class="card"><h3>🧹 Data Cleaning — เปลี่ยนค่าที่สะกดผิดทั้งระบบ</h3>
+  <form method="post" action="/admin/masters/clean/rename" class="row">
+    <select name="field" style="width:auto"><option value="line">Line</option><option value="customer">Customer</option><option value="die_process">Die Process</option><option value="model">Model</option><option value="problem_text">Problem (ในใบงาน)</option><option value="root_cause_text">Root cause (ในใบงาน)</option></select>
+    <input name="old" placeholder="ค่าเดิม เช่น LIne3" required style="flex:1"><span>→</span><input name="new" placeholder="ค่าใหม่ เช่น Line3" required style="flex:1"><button class="btn amber" data-confirm="แทนที่ทุกใบงานและทะเบียนแม่พิมพ์?">แทนที่ทั้งหมด</button></form>
+  <div class="help">ดูรายการที่สะกดต่างกันได้ที่ <a href="/reports/anomaly">ตรวจข้อมูล</a> · ทะเบียนแม่พิมพ์แก้รายตัวที่ <a href="/dies">Die register</a></div></div>
+<div class="grid g2">
+  {{ simple('line', '🏭 Line', lines) }}
+  {{ simple('customer', '🤝 ลูกค้า', customers) }}
+  {{ bilingual('problem', '⚠️ ปัญหา (Production เลือกตอนแจ้ง)', problems) }}
+  {{ bilingual('cause', '🔬 สาเหตุ (Die MT เลือกตอนปิดงาน)', causes) }}
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_anomaly') }}{% endblock %}
+{% block content %}
+<div class="card tight"><div class="row between"><div><h3>🔎 ตรวจข้อมูลผิดปกติ & แจ้งเตือนล่วงหน้า</h3><div class="muted">ระบบสแกนข้อมูลสด: งานค้างผิดปกติ · ข้อมูลที่ต้อง Cleaning · แม่พิมพ์/Line ที่มีแนวโน้มเสีย · PM เกินกำหนด</div></div>
+  <span class="row"><span class="pill red">{{ findings|selectattr('level','equalto','danger')|list|length }} วิกฤต</span><span class="pill amber">{{ findings|selectattr('level','equalto','warn')|list|length }} เตือน</span><span class="pill blue">{{ findings|selectattr('level','equalto','info')|list|length }} ควรแก้</span></span></div></div>
+{% if not findings %}<div class="alert success">✅ ไม่พบความผิดปกติ</div>{% endif %}
+<div class="grid g2">
+{% for f in findings %}
+  <div class="card" style="border-left:5px solid var(--{{ 'red' if f.level=='danger' else 'amber' if f.level=='warn' else 'blue' }})">
+    <div class="row between"><h3 style="margin:0">{{ f.title }}</h3><span class="pill {{ 'red' if f.level=='danger' else 'amber' if f.level=='warn' else 'blue' }}">{{ f.count }}</span></div>
+    <ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;font-size:.9rem">{% for i in f["items"] %}<li>{{ i }}</li>{% endfor %}{% if f.count > f["items"]|length %}<li class="muted">… อีก {{ f.count - f["items"]|length }} รายการ</li>{% endif %}</ul>
+    {% if f.link %}<a href="{{ f.link }}" class="btn sm sec" style="margin-top:8px">ไปจัดการ →</a>{% endif %}
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

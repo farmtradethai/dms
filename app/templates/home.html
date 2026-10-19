@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('home') }} — {{ company.code }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="row between">
+    <div>
+      <h1>{{ t('welcome') }}, {{ user.full_name }}</h1>
+      <div class="muted">{{ t('role_' ~ user.role) }} · {{ company.name }} · {{ today|d }}</div>
+    </div>
+    <div class="row">
+      <a href="/requests/new" class="btn" style="background:#fff;color:var(--nav)">📝 {{ t('menu_new_request') }}</a>
+      <a href="/scan" class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.5)">📷 {{ t('menu_scan') }}</a>
+    </div>
+  </div>
+</div>
+
+<div class="grid g6">
+  <a href="/requests?view=open" class="kpi"><div class="v">{{ s_all.open }}</div><div class="l">{{ t('kpi_open') }}{{ '' if s_all.scope_all else ' (ของฉัน)' }}</div></a>
+  <a href="/requests?view=open&flag=emergency" class="kpi red"><div class="v">{{ s_all.emergency_open }}</div><div class="l">{{ t('kpi_emergency') }}{{ '' if s_all.scope_all else ' (ของฉัน)' }}</div></a>
+  <a href="/requests?view=open&flag=overdue" class="kpi amber"><div class="v">{{ s_all.overdue_open }}</div><div class="l">{{ t('kpi_overdue') }}{{ '' if s_all.scope_all else ' (ของฉัน)' }}</div></a>
+  <a href="/requests?view=open&status=WAIT_QC" class="kpi teal"><div class="v">{{ s_all.wait_qc }}</div><div class="l">{{ t('kpi_wait_qc') }}{{ '' if s_all.scope_all else ' (ของฉัน)' }}</div></a>
+  <a href="/dashboard" class="kpi violet"><div class="v">{{ s_month.mttr_text }}</div><div class="l">{{ t('kpi_mttr') }} · {{ t('this_month') }}</div></a>
+  <a href="{{ '/pm' if allowed('pm') else '/dashboard' }}" class="kpi green"><div class="v">{{ s_month.pm_achievement if s_month.pm_achievement is not none else '-' }}{% if s_month.pm_achievement is not none %}%{% endif %}</div><div class="l">{{ t('kpi_pm') }} · PM {{ pm_overdue }} overdue / {{ pm_due }} due</div></a>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <h3>⏳ {{ t('menu_approve') if s_all.scope_all else 'รอคุณดำเนินการ' }} <small class="muted">({{ s_all.queue }})</small> <a href="/requests?view=approve" class="btn sm sec" style="margin-left:auto">{{ t('all') }}</a></h3>
+    {% if not queue %}<p class="muted">ไม่มีงานที่รอคุณดำเนินการ 🎉</p>{% endif %}
+    <div class="list-cards">
+    {% for r in queue %}
+      <a class="job {{ 'emergency' if r.is_emergency }} {{ 'overdue' if r.is_overdue }}" href="/requests/{{ r.id }}">
+        <div>
+          <div class="dr">{{ r.dr_no }} <span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span> {% if r.is_emergency %}<span class="pill red">🔥 {{ t('emergency') }}</span>{% endif %}</div>
+          <div>{{ r.part_no }} · {{ r.die_process }} <span class="tag">{{ r.line or '-' }}</span></div>
+          <div class="meta">{{ r.problem_text }} · {{ r.customer }} · {{ t('target_date') }} {{ r.target_date|d }}{% if r.technician_names %} · 👷 {{ r.technician_names }}{% endif %}</div>
+        </div>
+        <div class="muted" style="font-size:.8rem;text-align:right">{{ r.created_at|dt }}<br>{{ t('type_' ~ r.request_type) }}</div>
+      </a>
+    {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h3>🕘 {{ "รายการล่าสุด" if s_all.scope_all else ("ใบงานล่าสุดของฉัน" if user.role != "technician" else "งานล่าสุดที่ได้รับมอบหมาย") }}</h3>
+    <div class="list-cards">
+    {% for r in recent %}
+      <a class="job {{ 'emergency' if r.is_emergency }}" href="/requests/{{ r.id }}">
+        <div>
+          <div class="dr">{{ r.dr_no }} <span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span></div>
+          <div>{{ r.part_no }} · {{ r.die_process }}</div>
+          <div class="meta">{{ r.problem_text }} · {{ r.requester_name }}</div>
+        </div>
+        <div class="muted" style="font-size:.8rem;text-align:right">{{ r.created_at|dt }}</div>
+      </a>
+    {% endfor %}
+    </div>
+    <div class="row" style="margin-top:12px">
+      <a href="/dashboard" class="btn sm sec">📊 {{ t('menu_dashboard') }}</a>
+      <a href="/tv" class="btn sm sec">📺 {{ t('menu_tv') }}</a>
+      {% if allowed('analytics') %}<a href="/analytics" class="btn sm sec">🧠 วิเคราะห์เชิงลึก</a>{% endif %}
+      {% if allowed('reports') %}<a href="/reports" class="btn sm sec">📈 {{ t('menu_reports') }}</a>{% endif %}
+      {% if allowed('anomaly') %}<a href="/reports/anomaly" class="btn sm sec">🔎 {{ t('menu_anomaly') }}</a>{% endif %}
+    </div>
+    {% if storage %}
+    <hr>
+    <div class="row between"><b>🖼️ Storage</b><span>{{ storage.mb }} MB / {{ storage.warn_mb }} MB · {{ storage.count }} รูป</span></div>
+    <div class="progress" style="margin-top:6px"><i style="width:{{ storage.pct }}%;{{ 'background:var(--red)' if storage.warn }}"></i></div>
+    {% if storage.warn %}<div class="alert warn" style="margin-top:8px">พื้นที่รูปใกล้เต็ม — <a href="/admin/storage">Backup แล้ว Archive</a></div>{% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

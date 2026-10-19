@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Die Board — TV</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1222;--card:#131c31;--card2:#18233c;--line:#25324f;--text:#eaf0fc;--muted:#8e9cc0;--dim:#5f6d92;
+ --green:#33d17a;--amber:#ffb547;--red:#ff6161;--blue:#5ea8ff;--violet:#b892ff;--teal:#41d6c8;--gray:#8e9cc0}
+*{box-sizing:border-box}
+/* one base size that follows the screen: 15px on a 1920 TV, 12px on a laptop, never below 12 */
+html{font-size:clamp(12px,.78vw,22px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Sarabun,system-ui,sans-serif;height:100vh;overflow:hidden;line-height:1.35}
+.wrap{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;height:100vh;padding:.9rem 1.1rem .6rem;gap:.8rem}
+/* header */
+.hd{display:flex;align-items:center;gap:.8rem;min-width:0}
+.logo{width:2.9rem;height:2.9rem;border-radius:.7rem;background:#fff;color:#0b1222;font-weight:900;font-size:1.25rem;display:grid;place-items:center;flex:none}
+.ttl{min-width:0}.ttl h1{margin:0;font-size:1.45rem;font-weight:800;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl .sub{color:var(--muted);font-size:.85rem}
+.clock{margin-left:auto;text-align:right;flex:none}.clock b{font-size:1.7rem;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.clock .sub{color:var(--muted);font-size:.85rem}
+.live{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--green);box-shadow:0 0 .6rem var(--green);margin-right:.4rem;animation:pulse 1.6s infinite;vertical-align:middle}
+@keyframes pulse{50%{opacity:.35}}
+.tb{background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:.6rem;padding:.4rem .7rem;font:inherit;font-size:.9rem;font-weight:700;text-decoration:none;cursor:pointer;white-space:nowrap;flex:none}
+.tb:hover{background:#22304f}:fullscreen .tb{opacity:.18}:fullscreen .tb:hover{opacity:1}
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:.6rem}
+.k{background:var(--card);border-radius:.8rem;padding:.6rem .85rem .55rem;border-top:.22rem solid var(--blue);min-width:0}
+.k .v{font-size:2.15rem;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;white-space:nowrap}
+.k .v small{font-size:.5em;font-weight:700;color:var(--muted);margin-left:.15em}
+.k .l{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.k.red{border-color:var(--red)}.k.red .v{color:var(--red)}.k.amber{border-color:var(--amber)}.k.amber .v{color:var(--amber)}
+.k.green{border-color:var(--green)}.k.green .v{color:var(--green)}.k.violet{border-color:var(--violet)}.k.violet .v{color:var(--violet)}.k.teal{border-color:var(--teal)}.k.teal .v{color:var(--teal)}
+/* body */
+.main{display:grid;grid-template-columns:minmax(0,1.78fr) minmax(0,1fr);gap:.8rem;min-height:0}
+.panel{background:var(--card);border-radius:.9rem;padding:.75rem .9rem;min-height:0;display:flex;flex-direction:column;min-width:0}
+.ph{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;min-width:0}
+.ph h3{margin:0;font-size:.95rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph .sp{flex:1}
+.ctl{display:flex;gap:.3rem;align-items:center;color:var(--muted);font-size:.8rem}
+.ctl button{background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:.45rem;width:2rem;height:1.8rem;font:inherit;cursor:pointer;line-height:1}
+.ctl button:hover{background:#22304f}
+.flow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.4rem;margin-bottom:.6rem}
+.flow div{background:var(--card2);border-radius:.6rem;padding:.35rem .4rem;text-align:center;position:relative;min-width:0}
+.flow div:not(:last-child)::after{content:"›";position:absolute;right:-.42rem;top:50%;transform:translateY(-55%);color:var(--dim);font-size:1.2rem}
+.flow b{display:block;font-size:1.5rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.flow small{color:var(--muted);font-size:.74rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* scroll areas: wheel / touch / buttons; scrollbar kept thin */
+.scroll{overflow-y:auto;min-height:0;flex:1;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#2c3a5c transparent;overscroll-behavior:contain}
+.scroll::-webkit-scrollbar{width:6px}.scroll::-webkit-scrollbar-thumb{background:#2c3a5c;border-radius:6px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;background:var(--card);z-index:1;text-align:left;color:var(--muted);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;padding:.3rem .5rem;border-bottom:1px solid var(--line)}
+td{padding:.45rem .5rem;border-bottom:1px solid var(--line);vertical-align:middle;min-width:0}
+td .t1{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td .t2{color:var(--muted);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+tr.em td:first-child{box-shadow:inset .25rem 0 0 var(--red)}
+tr.od{background:rgba(255,97,97,.07)}
+.pill{display:inline-block;padding:.08rem .55rem;border-radius:99px;font-size:.76rem;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.pill.amber{background:rgba(255,181,71,.16);color:var(--amber)}.pill.blue{background:rgba(94,168,255,.16);color:var(--blue)}.pill.violet{background:rgba(184,146,255,.16);color:var(--violet)}
+.pill.teal{background:rgba(65,214,200,.16);color:var(--teal)}.pill.red{background:rgba(255,97,97,.18);color:var(--red)}.pill.green{background:rgba(51,209,122,.16);color:var(--green)}.pill.gray{background:#253150;color:var(--muted)}
+.bar{height:.32rem;background:#263352;border-radius:9px;overflow:hidden;margin-top:.3rem}.bar i{display:block;height:100%;background:var(--blue)}
+.av{width:2rem;height:2rem;border-radius:50%;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font-weight:800;font-size:.85rem;flex:none;border:2px solid var(--card);background:#2a3756}
+.stack{display:flex;align-items:center;min-width:0}.stack .av+.av{margin-left:-.55rem}
+.stack .nm{margin-left:.4rem;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* right column */
+.right{display:grid;grid-template-rows:minmax(0,1.25fr) minmax(0,1fr);gap:.8rem;min-height:0}
+.team{display:grid;grid-template-columns:repeat(auto-fill,minmax(15.5rem,1fr));gap:.5rem;align-content:start}
+.tm{display:flex;gap:.6rem;align-items:center;background:var(--card2);border-radius:.7rem;padding:.5rem .6rem;min-width:0;border-left:.22rem solid transparent}
+.tm.busy{border-left-color:var(--blue)}.tm.queue{border-left-color:var(--amber)}.tm.free{border-left-color:var(--green)}.tm.lead{border-left-color:var(--violet)}
+.tm .av{width:3.1rem;height:3.1rem;font-size:1.15rem;border:0;position:relative}
+.tm .pic{position:relative;flex:none}.tm .on{position:absolute;right:0;bottom:0;width:.75rem;height:.75rem;border-radius:50%;background:var(--green);border:2px solid var(--card2)}
+.tm .info{min-width:0;flex:1}
+.tm .n{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm .s{font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm .d{font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:.3rem;flex-wrap:wrap}
+.tabs button{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:.15rem .65rem;font:inherit;font-size:.78rem;cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--blue);border-color:var(--blue);color:#06101f;font-weight:700}
+.view{display:none;flex:1;min-height:0;flex-direction:column}.view.on{display:flex}
+.list .it{display:flex;align-items:center;gap:.6rem;padding:.4rem .2rem;border-bottom:1px solid var(--line);min-width:0}
+.list .it .grow{flex:1;min-width:0}
+.list .it .big{font-size:1.35rem;font-weight:800;font-variant-numeric:tabular-nums}
+.chart{position:relative;flex:1;min-height:0}
+.empty{color:var(--muted);text-align:center;padding:2rem 0}
+/* ticker */
+.ticker{background:var(--card);border-radius:.7rem;height:2.2rem;overflow:hidden;position:relative;display:flex;align-items:center}
+.ticker .lbl{background:var(--red);color:#fff;font-weight:800;padding:0 .8rem;height:100%;display:flex;align-items:center;flex:none;z-index:1;font-size:.9rem}
+.ticker .run{white-space:nowrap;display:inline-block;padding-left:100%;animation:run linear infinite;font-size:.95rem}
+.ticker .run span{margin-right:3rem}
+.ticker .upd{color:var(--muted);font-size:.78rem;padding:0 .8rem;flex:none;background:var(--card);z-index:1;height:100%;display:flex;align-items:center}
+@keyframes run{to{transform:translateX(-100%)}}
+.ticker .mask{flex:1;overflow:hidden;min-width:0;height:100%;display:flex;align-items:center}
+/* columns of the job table */
+col.c-dr{width:12%}col.c-die{width:23%}col.c-line{width:7%}col.c-pb{width:12%}col.c-tech{width:17%}col.c-st{width:19%}col.c-tg{width:10%}
+/* smaller screens: stack, page scrolls */
+@media (max-width:1100px){html{font-size:13px}.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.main{grid-template-columns:1fr}
+  body{overflow:auto;height:auto}.wrap{height:auto}.main .panel{max-height:none}.jobs-panel .scroll{max-height:70vh}.right{grid-template-rows:auto auto}.right .panel{min-height:22rem}}
+@media (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.flow{grid-template-columns:repeat(4,minmax(0,1fr))}.flow div::after{display:none}
+  .hd{flex-wrap:wrap}.clock{width:100%;text-align:left;margin-left:0}.ttl h1{font-size:1.1rem;white-space:normal}
+  /* job table becomes one card per job */
+  table,tbody{display:block}thead,colgroup{display:none}
+  tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"dr tg" "die die" "pb pb" "tech st";gap:.15rem .6rem;padding:.55rem .5rem .55rem .8rem;border-bottom:1px solid var(--line)}
+  td{border:0;padding:0}td:nth-child(1){grid-area:dr}td:nth-child(2){grid-area:die}td:nth-child(3){display:none}td:nth-child(4){grid-area:pb}
+  td:nth-child(5){grid-area:tech}td:nth-child(6){grid-area:st;text-align:right}td:nth-child(7){grid-area:tg;text-align:right}
+  .jobs-panel .scroll{max-height:none;overflow:visible}.team{grid-template-columns:1fr}}
+</style></head><body>
+<div class="wrap">
+  <div class="hd">
+    <a href="javascript:history.length>1?history.back():location.href='/'" class="tb" title="กลับ">← กลับ</a>
+    <a href="/" class="tb" title="หน้าหลัก">🏠</a>
+    <button class="tb" onclick="toggleFS()" title="เต็มจอ">⛶</button>
+    <div class="logo" id="logo">A</div>
+    <div class="ttl"><h1 id="title">DIE MAINTENANCE BOARD</h1><div class="sub" id="sub">แจ้งซ่อม · PM · Try-out · QC</div></div>
+    <div class="clock"><b><span class="live"></span><span id="clock">--:--:--</span></b><div class="sub" id="shift"></div></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="main">
+    <div class="panel jobs-panel">
+      <div class="flow" id="flow"></div>
+      <div class="ph"><h3>งานที่กำลังดำเนินการ <span id="jcount"></span></h3><span class="sp"></span>
+        <div class="ctl"><span id="jpage"></span><button onclick="J.step(-1)" title="ขึ้น">▲</button><button onclick="J.step(1)" title="ลง">▼</button><button id="jplay" onclick="J.toggle()" title="หยุด/เล่นเลื่อนอัตโนมัติ">⏸</button></div></div>
+      <div class="scroll" id="jscroll">
+        <table><colgroup><col class="c-dr"><col class="c-die"><col class="c-line"><col class="c-pb"><col class="c-tech"><col class="c-st"><col class="c-tg"></colgroup>
+          <thead><tr><th>DR</th><th>แม่พิมพ์</th><th class="h-line">Line</th><th class="h-pb">ปัญหา</th><th>ช่าง</th><th>สถานะ / รอใคร</th><th>กำหนด</th></tr></thead>
+          <tbody id="jobs"></tbody></table>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="ph"><h3>👷 ทีม Die Maintenance</h3><span class="sp"></span>
+          <div class="ctl"><span id="tsum"></span><button onclick="T.step(-1)">▲</button><button onclick="T.step(1)">▼</button></div></div>
+        <div class="scroll" id="tscroll"><div class="team" id="team"></div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="tabs" id="tabs"></div><span class="sp"></span><div class="ctl"><button id="rplay" onclick="R.toggle()" title="หยุด/เล่นสลับอัตโนมัติ">⏸</button></div></div>
+        <div class="view list scroll" data-k="appr"></div>
+        <div class="view" data-k="trend"><div class="chart"><canvas id="c1"></canvas></div></div>
+        <div class="view" data-k="dies"><div class="chart"><canvas id="c2"></canvas></div></div>
+        <div class="view" data-k="prob"><div class="chart"><canvas id="c3"></canvas></div></div>
+        <div class="view list scroll" data-k="pm"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker"><div class="lbl">แจ้งเตือน</div><div class="mask"><div class="run" id="ticker"></div></div><div class="upd" id="upd"></div></div>
+</div>
+<script src="/static/js/chart.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const E = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const av = p => p.photo ? `<img class="av" src="${E(p.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;av&quot; style=&quot;background:hsl(${p.hue},55%,46%)&quot;>${E(p.init)}</span>'">` : `<span class="av" style="background:hsl(${p.hue},55%,46%)">${E(p.init)}</span>`;
+function shiftName(h){ return (h>=8 && h<20) ? 'กะเช้า 08:00–20:00' : 'กะดึก 20:00–08:00'; }
+
+/* auto-scroller: moves one "page" every few seconds, pauses while someone uses the wheel / touches / hovers */
+function Scroller(el, opts){
+  const o = Object.assign({ every: 8000, pause: 25000, pageEl: null, playBtn: null }, opts);
+  let playing = true, hold = 0;
+  const page = () => Math.max(60, el.clientHeight - 40);
+  const label = () => { if (!o.pageEl) return; const n = Math.max(1, Math.ceil((el.scrollHeight - 2) / page())); const i = Math.min(n, Math.floor(el.scrollTop / page() + 0.05) + 1);
+    o.pageEl.textContent = n > 1 ? `หน้า ${i}/${n}` : ''; };
+  const userHold = () => { hold = Date.now() + o.pause; };
+  ['wheel', 'touchstart', 'mousedown', 'keydown'].forEach(ev => el.addEventListener(ev, userHold, { passive: true }));
+  el.addEventListener('scroll', label);
+  setInterval(() => {
+    if (!playing || Date.now() < hold || el.matches(':hover')) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) el.scrollTop = 0; else el.scrollTop += page();
+  }, o.every);
+  return { step(d){ userHold(); el.scrollTop += d * page(); },
+           toggle(){ playing = !playing; if (o.playBtn) o.playBtn.textContent = playing ? '⏸' : '▶'; },
+           label };
+}
+const J = Scroller($('jscroll'), { every: 9000, pageEl: $('jpage'), playBtn: $('jplay') });
+const T = Scroller($('tscroll'), { every: 11000 });
+document.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'PageDown') J.step(1); if (e.key === 'ArrowUp' || e.key === 'PageUp') J.step(-1); if (e.key === 'f') toggleFS(); });
+
+const charts = { c: {}, resize(){ Object.values(this.c).forEach(c => c.resize()); } };
+/* rotating right-bottom panel */
+const VIEWS = [['appr', '⏳ ค้างอนุมัติ'], ['trend', '📈 แนวโน้ม'], ['dies', '🔁 ซ่อมบ่อย'], ['prob', '🧩 ปัญหา'], ['pm', '🛠 PM']];
+const R = (() => {
+  let i = 0, playing = true, hold = 0;
+  $('tabs').innerHTML = VIEWS.map(([k, l], n) => `<button data-n="${n}">${l}</button>`).join('');
+  $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) { show(+b.dataset.n); hold = Date.now() + 60000; } };
+  function show(n){ i = n; document.querySelectorAll('#tabs button').forEach((b, k) => b.classList.toggle('on', k === n));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.dataset.k === VIEWS[n][0])); charts.resize(); }
+  setInterval(() => { if (playing && Date.now() > hold) show((i + 1) % VIEWS.length); }, 14000);
+  show(0);
+  return { show, toggle(){ playing = !playing; $('rplay').textContent = playing ? '⏸' : '▶'; } };
+})();
+
+const tick = { color: '#8e9cc0', font: { size: 12 } };
+function upsert(id, cfg){ if (charts.c[id]) { charts.c[id].data = cfg.data; charts.c[id].update('none'); } else charts.c[id] = new Chart($(id), cfg); }
+function hbar(labels, data, color){
+  return { type: 'bar', data: { labels: labels.map(l => l.length > 34 ? l.slice(0, 33) + '…' : l), datasets: [{ data, backgroundColor: color, borderRadius: 4, maxBarThickness: 22 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: tick, grid: { color: '#25324f' }, beginAtZero: true }, y: { ticks: { color: '#eaf0fc', font: { size: 12 } }, grid: { display: false } } } } };
+}
+
+function kpiTile(cls, v, unit, label){ return `<div class="k ${cls}"><div class="v">${v}${unit ? `<small>${unit}</small>` : ''}</div><div class="l">${label}</div></div>`; }
+
+async function load(){
+  let d;
+  try { d = await fetch('/api/tv', { cache: 'no-store' }).then(r => { if (r.status === 401 || r.redirected) location.href = '/login?next=/tv'; return r.json(); }); }
+  catch (e) { $('upd').textContent = '⚠ ขาดการเชื่อมต่อ — ลองใหม่อัตโนมัติ'; return; }
+  $('logo').textContent = (d.logo || 'A').slice(0, 1);
+  $('title').textContent = `${d.logo} ${d.company} — DIE MAINTENANCE BOARD`;
+  $('sub').textContent = d.company_name;
+  $('shift').textContent = shiftName(new Date().getHours());
+  const k = d.kpi;
+  $('kpis').innerHTML = [
+    kpiTile('', k.open, '', 'งานค้างทั้งหมด'),
+    kpiTile(k.emergency ? 'red' : 'green', k.emergency, '', '🔥 งานด่วน'),
+    kpiTile(k.overdue ? 'red' : 'green', k.overdue, '', '⏰ เกินกำหนด'),
+    kpiTile('amber', k.approve, '', 'รออนุมัติ (Foreman/หัวหน้า)'),
+    kpiTile('violet', k.tryout + ' / ' + k.qc, '', 'รอ Try-out / รอ QC'),
+    kpiTile('green', k.closed_today + ' / ' + k.new_today, '', 'วันนี้ ปิด / รับใหม่'),
+    kpiTile('teal', k.mttr_h ?? '-', k.mttr_h != null ? 'ชม.' : '', 'MTTR เดือนนี้ (เวลาซ่อมสุทธิ)'),
+    kpiTile(k.ontime == null ? '' : (k.ontime >= 80 ? 'green' : 'amber'), k.ontime == null ? '-' : k.ontime, k.ontime == null ? '' : '%', `ปิดตรงเวลา · ปิดเดือนนี้ ${k.closed_month}`),
+  ].join('');
+  $('flow').innerHTML = d.flow.map(([l, v, c]) => `<div><b style="color:var(--${c})">${v}</b><small>${l}</small></div>`).join('');
+  $('jcount').textContent = `(${d.jobs.length}${d.jobs.length >= 120 ? '+' : ''})`;
+  $('jobs').innerHTML = d.jobs.map(j => `<tr class="${j.emergency ? 'em' : ''} ${j.overdue ? 'od' : ''}">
+      <td><div class="t1">${E(j.dr)}${j.emergency ? ' 🔥' : ''}</div><div class="t2">${j.type !== 'REPAIR' ? `<span class="pill violet">${E(j.type)}</span> ` : ''}${j.ng ? `<span class="pill red">NG ${j.ng}</span>` : E(j.age)}</div></td>
+      <td><div class="t1">${E(j.part)}</div><div class="t2">${E(j.process)}${j.customer ? ' · ' + E(j.customer) : ''}</div></td>
+      <td class="c-line"><div class="t1" style="font-weight:600">${E(j.line)}</div></td>
+      <td class="c-pb"><div class="t1" style="font-weight:500">${E(j.problem)}</div></td>
+      <td>${j.techs.length ? `<div class="stack">${j.techs.map(av).join('')}<span class="nm">${E(j.techs.map(t => t.short.split(' ')[0]).join(', '))}${j.tech_more ? ' +' + j.tech_more : ''}</span></div>` : '<span class="t2">—</span>'}</td>
+      <td><span class="pill ${j.color}">${E(j.status_label)}</span>${j.wait ? `<div class="t2">รอ: ${E(j.wait)}</div>` : `<div class="bar"><i style="width:${j.pct}%"></i></div>`}</td>
+      <td><div class="t1" style="color:${j.overdue ? 'var(--red)' : 'inherit'}">${E(j.target)}</div><div class="t2">${j.overdue ? 'เกินกำหนด' : 'อายุ ' + E(j.age)}</div></td></tr>`).join('')
+    || '<tr><td colspan="7" class="empty">ไม่มีงานค้าง 🎉</td></tr>';
+  J.label();
+  const busy = d.team.filter(p => p.state === 'busy').length, free = d.team.filter(p => p.state === 'free').length;
+  $('tsum').textContent = `ซ่อมอยู่ ${busy} · ว่าง ${free}`;
+  $('team').innerHTML = d.team.map(p => `<div class="tm ${p.state}"><div class="pic">${av(p)}${p.online ? '<span class="on" title="ออนไลน์"></span>' : ''}</div>
+      <div class="info"><div class="n">${E(p.short || p.name)}</div>
+      <div class="d">${p.state === 'busy' ? '🔧 ' + E(p.doing) : p.state === 'queue' ? `📋 รอเริ่ม ${p.open} งาน` : p.state === 'lead' ? (p.open ? `⏳ รออนุมัติ ${p.open} ใบ` : '✅ ไม่มีงานรออนุมัติ') : '🟢 ว่าง พร้อมรับงาน'}</div>
+      <div class="s">${E(p.role)}${p.shift ? ' · ' + E(p.shift) : ''}${p.state !== 'lead' ? ` · ค้าง ${p.open}${p.emergency ? ' · 🔥' + p.emergency : ''} · ปิดเดือนนี้ ${p.closed_month}` : ''}</div></div></div>`).join('')
+    || '<div class="empty">ยังไม่มีช่างในระบบ</div>';
+  document.querySelector('[data-k=appr]').innerHTML = d.approvers.map(p => `<div class="it">${av(p)}<div class="grow"><div class="t1">${E(p.short || p.name)}</div><div class="t2">รอนานสุด ${E(p.oldest)}</div></div><div class="big" style="color:${p.late ? 'var(--red)' : 'var(--amber)'}">${p.count}</div></div>`).join('')
+    || '<div class="empty">ไม่มีใบงานค้างรออนุมัติ ✅</div>';
+  document.querySelector('[data-k=pm]').innerHTML = d.pm.map(p => `<div class="it"><div class="grow"><div class="t1">${E(p.die)}</div><div class="t2">${E(p.line)}</div></div><span class="pill ${p.late ? 'red' : 'amber'}">${E(p.date)}</span></div>`).join('')
+    || '<div class="empty">ไม่มี PM ถึงกำหนดใน 7 วัน ✅</div>';
+  const m = d.months;
+  upsert('c1', { type: 'bar', data: { labels: m.map(x => x.month.slice(5) + '-' + x.month.slice(2, 4)), datasets: [
+      { label: 'ซ่อม', data: m.map(x => x.repair), backgroundColor: '#5ea8ff', borderRadius: 4, maxBarThickness: 28 },
+      { label: 'PM', data: m.map(x => x.pm), backgroundColor: '#33d17a', borderRadius: 4, maxBarThickness: 28 },
+      { type: 'line', label: 'MTTR (นาที)', data: m.map(x => x.mttr), borderColor: '#ffb547', backgroundColor: '#ffb547', yAxisID: 'y2', tension: .3 }] },
+    options: { maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { color: '#8e9cc0', boxWidth: 10, font: { size: 12 } } } },
+      scales: { x: { ticks: tick, grid: { display: false } }, y: { ticks: tick, grid: { color: '#25324f' }, beginAtZero: true }, y2: { position: 'right', ticks: { color: '#ffb547' }, grid: { display: false }, beginAtZero: true } } } });
+  upsert('c2', hbar(d.top_dies.map(x => x[0]), d.top_dies.map(x => x[1]), '#ff6161'));
+  upsert('c3', hbar(d.top_problems.map(x => x[0] || '-'), d.top_problems.map(x => x[1]), '#b892ff'));
+  const tk = d.ticker.length ? d.ticker : ['✅ ไม่มีงานด่วน / งานเกินกำหนด'];
+  const html = tk.map(x => `<span>${E(x)}</span>`).join('');
+  if ($('ticker').dataset.h !== html) { $('ticker').innerHTML = html; $('ticker').dataset.h = html; $('ticker').style.animationDuration = Math.max(25, tk.join('').length / 7) + 's'; }
+  $('upd').textContent = 'อัปเดต ' + d.now.slice(11, 16);
+}
+setInterval(() => $('clock').textContent = new Date().toLocaleTimeString('th-TH', { hour12: false }), 1000);
+const TV_HOURS = "{{ tv_hours }}";   // e.g. "07:30-20:30" — pause polling outside working hours (saves free DB quota)
+function inHours(){
+  const m = TV_HOURS.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/); if (!m) return true;
+  const n = new Date(), cur = n.getHours() * 60 + n.getMinutes(), a = +m[1] * 60 + +m[2], b = +m[3] * 60 + +m[4];
+  return a <= b ? (cur >= a && cur <= b) : (cur >= a || cur <= b);
+}
+function poll(){ if (inHours()) load(); else $('upd').textContent = 'นอกเวลาทำงาน (' + TV_HOURS + ')'; }
+load(); setInterval(poll, 60000);   // 1 refresh a minute: enough for a wall board, gentle on free hosting quotas
+window.addEventListener('resize', () => { charts.resize(); J.label(); });
+function toggleFS(){ if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
+</script>
+</body></html>

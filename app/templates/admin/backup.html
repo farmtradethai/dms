@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block pagetitle %}Backup{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+{% if no_company %}<div class="alert danger"><b>เครื่องนี้ยังไม่มีข้อมูล (ติดตั้งใหม่ / ย้าย host)</b> — เลือกไฟล์ Backup ที่ดาวน์โหลดเก็บไว้ ในกล่อง "กู้คืน" แล้วติ๊ก "เขียนทับ" เพื่อนำข้อมูลทั้งหมดกลับมา จากนั้น login ใหม่</div>{% endif %}
+{% if not s3 %}<div class="alert warn">ที่เก็บ Backup ตอนนี้คือ <b>ดิสก์ของเซิร์ฟเวอร์</b> — บนเครื่องในโรงงานใช้ได้ แต่บน host ฟรี (Render) ไฟล์จะหายเมื่อแอปหลับ/deploy:
+ให้ (1) ตั้ง S3/R2 เพื่อเก็บ Backup ใน Bucket อัตโนมัติ หรือ (2) ติ๊กส่ง Backup ไป Telegram/Discord/Email ในช่องทางแจ้งเตือน (event "ไฟล์ Backup อัตโนมัติ") หรือ (3) ดาวน์โหลดเก็บเองทุกสัปดาห์</div>
+{% else %}<div class="alert success">Backup ถูกเก็บใน <b>Bucket (S3/R2)</b> อัตโนมัติ — ไม่หายแม้ host ฟรีจะรีสตาร์ท</div>{% endif %}
+<div class="grid g2" style="align-items:start">
+<div class="stack">
+<div class="card"><h3>⏰ Backup อัตโนมัติ & รายงานประจำวัน</h3>
+  <form method="post" action="/admin/backup/settings" class="stack">
+    <label class="check"><input type="checkbox" name="auto_backup" value="1" {{ 'checked' if s.auto_backup }}> Backup ข้อมูลบริษัท {{ company.code if company else 'ALL' }} อัตโนมัติทุกวัน</label>
+    <div class="row"><span>หลังเวลา</span><input type="number" name="auto_backup_hour" min="0" max="23" value="{{ s.auto_backup_hour }}" style="width:80px"><span>:00 น. · เก็บไว้</span><input type="number" name="backup_keep" min="1" max="90" value="{{ s.backup_keep }}" style="width:80px"><span>ไฟล์ล่าสุด (เก่ากว่านั้นลบอัตโนมัติ)</span></div>
+    <label class="check"><input type="checkbox" name="daily_report" value="1" {{ 'checked' if s.daily_report }}> ส่งรายงานงานค้างประจำวัน (แนบ Excel) ไปช่องทางที่เลือก event "รายงานประจำวัน"</label>
+    <div class="row"><span>หลังเวลา</span><input type="number" name="daily_report_hour" min="0" max="23" value="{{ s.daily_report_hour }}" style="width:80px"><span>:00 น.</span></div>
+    <button class="btn">{{ t('save') }}</button>
+  </form>
+  <div class="help">ตัวจัดเวลารันทุกชั่วโมงขณะแอปทำงาน (host ฟรีต้องมีตัวปลุก /healthz) · Backup ล่าสุด: <b>{{ age if age is not none else '-' }}</b> ชม.ที่แล้ว</div>
+</div>
+<div class="card"><h3>💾 สร้าง Backup ตอนนี้</h3>
+  <form method="post" action="/admin/backup" class="stack">
+    <label class="check"><input type="radio" name="scope" value="company" checked> เฉพาะบริษัท {{ company.code if company else 'ALL' }}</label>
+    {% if user.is_superadmin %}<label class="check"><input type="radio" name="scope" value="all"> ทุกบริษัท (ทั้งระบบ — สำหรับย้าย host / กู้ระบบทั้งหมด)</label>{% endif %}
+    <label class="check"><input type="checkbox" name="include_images" value="1"> รวมรูปภาพด้วย (ไฟล์ใหญ่ขึ้น)</label>
+    <label class="check"><input type="checkbox" name="send" value="1"> ส่งไฟล์ไปช่องทางแจ้งเตือนที่เลือก event "ไฟล์ Backup อัตโนมัติ"</label>
+    <button class="btn">สร้าง Backup</button>
+  </form>
+  <div class="help" style="margin-top:8px">ไฟล์ ZIP มี database.json (ทุกตาราง — ใช้กู้ได้ทั้ง SQLite และ Postgres) + images/ (ถ้าเลือก) · Excel อ่านง่ายสำหรับคนดู: เมนูรายงาน › Export Excel</div>
+</div>
+{% if user.is_superadmin %}<div class="card"><h3>♻️ กู้คืนจากไฟล์ Backup</h3>
+  <form method="post" action="/admin/backup/restore" enctype="multipart/form-data" class="stack"><input type="file" name="file" accept=".zip" required>
+    <label class="check"><input type="checkbox" name="replace" value="1"> เขียนทับรายการที่ id ซ้ำ (ไม่ติ๊ก = เพิ่มเฉพาะที่ยังไม่มี)</label>
+    <button class="btn red" data-confirm="กู้คืนข้อมูลจากไฟล์นี้?">กู้คืน</button></form>
+  <div class="help">ใช้กู้หลังลบผิด (ไฟล์ Backup ที่ระบบสร้างก่อนล้างใบงาน) หรือย้ายไป host ใหม่ (ฐานข้อมูลว่าง → กู้ไฟล์ "ทุกบริษัท")</div></div>{% endif %}
+</div>
+<div class="card tight"><h3>ไฟล์ Backup</h3>
+  <table class="tbl"><tr><th>ไฟล์</th><th class="num">MB</th><th>เวลา</th><th>ที่เก็บ</th><th></th></tr>
+  {% for b in backups %}<tr><td><a href="/admin/backup/download/{{ b.name }}">⬇ {{ b.name }}</a></td><td class="num">{{ b.mb }}</td><td><small>{{ b.at }}</small></td><td><span class="tag">{{ b.where }}</span></td>
+    <td><form method="post" action="/admin/backup/delete/{{ b.name }}"><button class="btn sm ghost" data-confirm="ลบไฟล์ {{ b.name }}?">🗑</button></form></td></tr>
+  {% else %}<tr><td colspan="5" class="muted">ยังไม่มี</td></tr>{% endfor %}</table>
+</div>
+</div>
+{% endblock %}

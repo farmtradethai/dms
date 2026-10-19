@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block pagetitle %}บันทึก Stroke แม่พิมพ์{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+<div class="grid g2" style="align-items:start">
+<div>
+  <div class="card">
+    <h3>🔢 บันทึก Stroke (จำนวนครั้งที่ปั๊ม)</h3>
+    <form class="row" method="get" style="margin-bottom:8px">
+      <input name="q" value="{{ q }}" placeholder="🔍 Die Code / Part No / ชื่อชิ้นงาน" style="flex:1;min-width:180px" autofocus>
+      <button class="btn sec">ค้นหา</button><a href="/scan?next=strokes" class="btn ghost">📷 สแกน QR</a>
+    </form>
+    {% if found %}<div class="list-cards">{% for d in found %}<a class="job" href="?die_id={{ d.id }}"><div><div class="dr">{{ d.part_no }}</div><div>{{ d.die_process }} <span class="tag">{{ d.line or '-' }}</span></div></div><div class="muted">{{ '{:,}'.format(d.stroke_count or 0) }}</div></a>{% endfor %}</div>{% endif %}
+    {% if die %}
+      <div class="pmbox" style="margin:8px 0">
+        <div class="row between"><div><b>{{ die.part_no }}</b> · {{ die.die_process }} <span class="tag">{{ die.line or '-' }}</span><br><small class="muted">{{ die.die_code or '' }} {{ die.part_name or '' }}</small></div>
+          <a href="/dies/{{ die.id }}#pm" class="btn sm ghost">แม่พิมพ์ →</a></div>
+        <div style="margin-top:6px">สะสม <b>{{ '{:,}'.format(die.stroke_count or 0) }}</b> · หลัง PM <b>{{ '{:,}'.format(die.strokes_since_pm) }}</b>
+          {% if die.pm_interval_strokes %} / {{ '{:,}'.format(die.pm_interval_strokes) }} ({{ die.stroke_pct }}%){% else %} · <span class="muted">ยังไม่ได้ตั้งรอบ PM ตาม Stroke</span>{% endif %}</div>
+        {% if die.pm_interval_strokes %}<div class="progress" style="margin-top:6px"><i style="width:{{ [die.stroke_pct or 0,100]|min }}%;{{ 'background:var(--red)' if (die.stroke_pct or 0) >= 100 else ('background:var(--amber)' if (die.stroke_pct or 0) >= 90 else '') }}"></i></div>{% endif %}
+      </div>
+      <form method="post" action="/pm/strokes" class="grid g2">
+        <input type="hidden" name="die_id" value="{{ die.id }}">
+        <div class="field"><label>วิธีบันทึก</label><select name="mode"><option value="add">เพิ่มจำนวนที่ผลิต (เช่น ยอดกะนี้)</option><option value="total">ยอดสะสมจาก Counter เครื่อง</option></select></div>
+        <div class="field"><label>จำนวน Stroke</label><input name="value" inputmode="numeric" required placeholder="เช่น 12500"></div>
+        <div class="field"><label>วันที่ผลิต</label><input type="date" name="work_date" value="{{ today.isoformat() }}"></div>
+        <div class="field"><label>หมายเหตุ</label><input name="note" placeholder="กะ / Lot"></div>
+        <div class="field"><button class="btn">💾 บันทึก</button></div>
+      </form>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>⬆ นำเข้าหลายแม่พิมพ์จาก Excel</h3>
+    <p class="muted" style="margin-top:0">คอลัมน์: DieCode (หรือ PartNo + DieProcess), Strokes, Mode (add = เพิ่ม / total = ยอดสะสม), Date, Note — ใช้กับรายงานยอดผลิตประจำวัน หรือไฟล์จากระบบ Counter</p>
+    <form method="post" action="/pm/strokes/upload" enctype="multipart/form-data" class="row"><input type="file" name="file" accept=".xlsx,.csv" required style="flex:1"><button class="btn">นำเข้า</button>
+      <a href="/pm/strokes/template.xlsx" class="btn sec">⬇ Template</a></form>
+    <div class="help">เชื่อมเครื่องจักร/PLC อัตโนมัติ: <code>POST /api/strokes</code> พร้อม X-API-Key (ดู <a href="/api/docs" target="_blank">/api/docs</a>)</div>
+  </div>
+</div>
+<div>
+  <div class="card tight">
+    <h3>📈 แม่พิมพ์ที่ PM ตาม Stroke ({{ stroke_dies|length }})</h3>
+    {% for d in stroke_dies %}<a href="?die_id={{ d.id }}" class="srow"><div class="row between"><span><b>{{ d.part_no }}</b> <small class="muted">{{ d.die_process }}</small></span><small>{{ '{:,}'.format(d.strokes_since_pm) }} / {{ '{:,}'.format(d.pm_interval_strokes) }}</small></div>
+      <div class="progress" style="height:6px"><i style="width:{{ [d.stroke_pct or 0,100]|min }}%;{{ 'background:var(--red)' if (d.stroke_pct or 0) >= 100 else ('background:var(--amber)' if (d.stroke_pct or 0) >= 90 else '') }}"></i></div></a>
+    {% else %}<p class="muted">ยังไม่มีแม่พิมพ์ที่ตั้งรอบ PM ตาม Stroke — ตั้งได้ที่หน้าแม่พิมพ์ › แผน PM</p>{% endfor %}
+  </div>
+  <div class="card tight">
+    <h3>🕒 บันทึกล่าสุด</h3>
+    <table class="tbl" style="font-size:.85rem">{% for l in logs %}<tr><td><small>{{ l.at|dt }}</small></td><td>{% if l.die %}<a href="?die_id={{ l.die_id }}">{{ l.die.part_no }}</a>{% endif %}</td><td class="num">+{{ '{:,}'.format(l.strokes) }}</td><td class="num"><small>{{ '{:,}'.format(l.total_after) }}</small></td><td><small class="muted">{{ l.source }} · {{ l.user_name }}</small></td></tr>
+    {% else %}<tr><td class="muted">ยังไม่มี</td></tr>{% endfor %}</table>
+  </div>
+</div>
+</div>
+<style>.srow{display:block;padding:6px 2px;border-bottom:1px solid var(--line);color:var(--text)}.srow:hover{text-decoration:none;background:var(--bg-soft)}</style>
+{% endblock %}

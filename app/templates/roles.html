@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block pagetitle %}สิทธิ์การใช้งาน{% endblock %}
+{% block content %}
+<div class="card tight"><div class="row between">
+  <div><h3 style="margin:0">🔐 ตารางสิทธิ์ตามบทบาท</h3>
+  <div class="muted">ตารางนี้สร้างจากกฎเดียวกับที่โปรแกรมใช้ตรวจสิทธิ์จริง · คุณคือ <span class="pill blue">{{ t('role_' ~ user.role) }}</span> (คอลัมน์ที่ไฮไลต์) · ผู้ดูแลระบบเปลี่ยนบทบาทผู้ใช้ได้ที่ ผู้ดูแลระบบ › ผู้ใช้ & สิทธิ์</div></div>
+  {% if allowed('admin') %}<a href="/admin/users" class="btn sm sec">👥 จัดการผู้ใช้</a>{% endif %}
+</div></div>
+{% macro head() %}<tr><th></th>{% for r in roles %}<th style="text-align:center;{{ 'background:var(--blue-bg)' if r==user.role }}">{{ t('role_' ~ r) }}{% if counts %}<br><small class="muted">{{ counts.get(r,0) }} คน</small>{% endif %}</th>{% endfor %}</tr>{% endmacro %}
+<div class="card tight"><h3>📄 หน้าที่เข้าได้</h3><div class="tbl-wrap"><table class="tbl roles">
+  <thead>{{ head() }}</thead><tbody>
+  {% for key, (th, en, url, rs) in pages.items() %}<tr><td><b>{{ th if lang=='th' else en }}</b><br><small class="muted">{{ url }}</small></td>
+    {% for r in roles %}<td style="text-align:center;{{ 'background:var(--blue-bg)' if r==user.role }}">{{ '✅' if r in rs else '—' }}</td>{% endfor %}</tr>{% endfor %}
+  <tr><td><b>ใบงานที่มองเห็น</b><br><small class="muted">รายการงาน · หน้าหลัก · ลิงก์ในอีเมล</small></td>
+    {% for r in roles %}<td style="text-align:center;font-size:.8rem;{{ 'background:var(--blue-bg)' if r==user.role }}">{{ visibility.get(r, ('-','-'))[0 if lang=='th' else 1] }}</td>{% endfor %}</tr>
+  </tbody></table></div></div>
+<div class="card tight"><h3>✅ ปุ่มอนุมัติ / ดำเนินการในใบงาน (ตามขั้นตอน)</h3><div class="tbl-wrap"><table class="tbl roles">
+  <thead>{{ head() }}</thead><tbody>
+  {% for a, label, step, rs in actions %}<tr><td><span class="tag">{{ step }}</span> {{ t(label) }}</td>
+    {% for r in roles %}<td style="text-align:center;{{ 'background:var(--blue-bg)' if r==user.role }}">{{ '✅' if r in rs else '—' }}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div>
+  <div class="alert info" style="margin-top:10px;font-size:.88rem"><b>🧭 ผังผู้อนุมัติของแต่ละบริษัท</b> — ปุ่มอนุมัติของ Foreman/Engineer, หัวหน้า Die, ผู้รับ Try-out และ QC จะแสดง<b>เฉพาะผู้ที่อยู่ในผังของ Line นั้น</b> (Admin › 🧭 ผังผู้อนุมัติ){% if user.is_admin %} · <a href="/admin/approvers">ตั้งค่าผัง</a>{% endif %} · Admin/Manager อนุมัติแทนได้ (บันทึกว่า "อนุมัติแทน")</div>
+  <div class="help" style="margin-top:8px">เงื่อนไขเพิ่มเติม: ช่างกด "รับงาน/ซ่อมเสร็จ" ได้เฉพาะงานที่ถูกมอบหมาย · Production กด Try-out ได้เฉพาะใบงานที่ตัวเองแจ้ง · อีเมล/แจ้งเตือนส่งเฉพาะผู้ที่ต้องดำเนินการขั้นถัดไป</div></div>
+<div class="card tight"><h3>🔁 ขั้นตอนอนุมัติและผู้ที่ได้รับแจ้ง</h3>
+<div class="steps" style="flex-wrap:wrap">
+  <div class="done">1. Production แจ้ง<br><small>→ แจ้ง Foreman/Eng ตามผังของ Line</small></div>
+  <div class="done">2. Foreman/Eng อนุมัติ<br><small>→ แจ้งหัวหน้า Die</small></div>
+  <div class="done">3. หัวหน้า Die มอบหมาย<br><small>→ แจ้งช่างที่ถูกเลือก</small></div>
+  <div class="done">4. ช่างซ่อมเสร็จ<br><small>→ แจ้งผู้แจ้งให้ Try-out</small></div>
+  <div class="done">5. Try-out ผ่าน<br><small>→ แจ้ง QC ตามผังของ Line</small></div>
+  <div class="done">6. QC OK ปิดงาน<br><small>→ แจ้งผู้แจ้ง + หัวหน้า Die</small></div>
+</div><div class="help">ไม่อนุมัติ → แจ้งผู้แจ้งให้แก้ไข · Try-out ไม่ผ่าน / QC NG → แจ้งหัวหน้า Die + ช่าง (วนซ่อมจนผ่าน)</div></div>
+<style>.tbl.roles td,.tbl.roles th{white-space:nowrap}.tbl.roles td:first-child{white-space:normal;min-width:180px;position:sticky;left:0;background:var(--card)}</style>
+{% endblock %}

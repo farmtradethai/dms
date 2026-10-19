@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block pagetitle %}Checklist PM{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2.2fr);align-items:start">
+<div class="card tight">
+  <h3>✅ แม่แบบ Checklist</h3>
+  {% for t in temps %}<a href="?tid={{ t.id }}" class="tsel {{ 'on' if cur and cur.id == t.id }}"><b>{{ t.name }}</b>{% if not t.is_active %} <span class="pill gray">ปิด</span>{% endif %}<br>
+    <small class="muted">{{ t.items|length }} ข้อ · {{ ('ใช้กับ Process ที่มีคำว่า: ' ~ t.match) if t.match else 'ค่าเริ่มต้น (ทุกแม่พิมพ์)' }}{% if usage[t.id] %} · ผูกตรง {{ usage[t.id] }} แม่พิมพ์{% endif %}</small></a>{% endfor %}
+  {% if can_edit %}<details style="margin-top:10px"><summary class="btn sm sec">➕ แม่แบบใหม่</summary>
+    <form method="post" action="/pm/templates" style="margin-top:8px"><div class="field"><label>ชื่อ</label><input name="name" required placeholder="เช่น PM แม่พิมพ์ Draw"></div>
+      <div class="field"><label>ใช้อัตโนมัติกับ Die Process ที่มีคำว่า (คั่นด้วย ,)</label><input name="match" placeholder="draw, deep"></div>
+      <div class="field"><label>คัดลอกรายการจาก</label><select name="copy_from"><option value="0">— เริ่มว่าง —</option>{% for t in temps %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></div>
+      <button class="btn">สร้าง</button></form></details>{% endif %}
+  <p class="help" style="margin-top:10px">ลำดับการเลือก: แม่แบบที่ผูกกับแม่พิมพ์โดยตรง → แม่แบบที่คำใน Die Process ตรง → แม่แบบค่าเริ่มต้น · ใบงาน PM จะคัดลอก checklist ตอนเปิดใบงาน (แก้แม่แบบภายหลังไม่กระทบประวัติเดิม)</p>
+</div>
+{% if cur %}
+<div class="card">
+  <div class="row between"><h3 style="margin:0">{{ cur.name }}</h3>
+    {% if can_edit %}<form method="post" action="/pm/templates/{{ cur.id }}/delete"><button class="btn sm ghost" data-confirm="ลบแม่แบบ {{ cur.name }}?">🗑 ลบแม่แบบ</button></form>{% endif %}</div>
+  {% if can_edit %}<form method="post" action="/pm/templates" class="row" style="margin:10px 0;gap:6px"><input type="hidden" name="tid" value="{{ cur.id }}">
+    <input name="name" value="{{ cur.name }}" style="flex:2;min-width:160px"><input name="match" value="{{ cur.match or '' }}" placeholder="คำใน Die Process (ว่าง = ค่าเริ่มต้น)" style="flex:2;min-width:160px">
+    <select name="is_active" style="width:auto"><option value="1" {{ 'selected' if cur.is_active }}>ใช้งาน</option><option value="0" {{ 'selected' if not cur.is_active }}>ปิด</option></select><button class="btn sm">บันทึก</button></form>{% endif %}
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>#</th><th>หมวด</th><th>รายการตรวจ</th><th>ชนิด</th><th>Spec</th><th></th></tr></thead><tbody>
+    {% for it in cur.items %}<tr><td>{{ it.sort }}</td><td><small>{{ it.section }}</small></td><td>{{ it.text }}</td>
+      <td><span class="pill {{ 'violet' if it.kind=='value' else 'blue' }}">{{ 'ค่าวัด' if it.kind=='value' else 'OK/NG' }}</span></td>
+      <td><small>{% if it.kind=='value' %}{{ it.spec_min if it.spec_min is not none else '' }}–{{ it.spec_max if it.spec_max is not none else '' }} {{ it.unit }}{% endif %}</small></td>
+      <td style="white-space:nowrap">{% if can_edit %}<button type="button" class="btn sm ghost" onclick='ed({{ tojson({"id":it.id,"sort":it.sort,"section":it.section,"text":it.text,"kind":it.kind,"unit":it.unit,"spec_min":it.spec_min,"spec_max":it.spec_max})|safe }})'>✏️</button>
+        <form method="post" action="/pm/templates/{{ cur.id }}/items/{{ it.id }}/delete" style="display:inline"><button class="btn sm ghost">🗑</button></form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">ยังไม่มีรายการ</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% if can_edit %}
+  <form method="post" action="/pm/templates/{{ cur.id }}/items" class="grid g4" id="itf" style="align-items:end;margin-top:12px">
+    <input type="hidden" name="iid" id="i_id" value="0">
+    <div class="field"><label>หมวด</label><input name="section" id="i_section" list="secs" placeholder="ชุดบน / ชุดล่าง / ระบบ"><datalist id="secs">{% for s in cur.items|map(attribute='section')|unique %}<option>{{ s }}</option>{% endfor %}</datalist></div>
+    <div class="field" style="grid-column:span 2"><label>รายการตรวจ *</label><input name="text" id="i_text" required></div>
+    <div class="field"><label>ชนิด</label><select name="kind" id="i_kind"><option value="check">OK / NG</option><option value="value">ค่าวัด (ตัวเลข)</option></select></div>
+    <div class="field"><label>หน่วย</label><input name="unit" id="i_unit" placeholder="mm"></div>
+    <div class="field"><label>Spec ต่ำสุด</label><input name="spec_min" id="i_spec_min" inputmode="decimal"></div>
+    <div class="field"><label>Spec สูงสุด</label><input name="spec_max" id="i_spec_max" inputmode="decimal"></div>
+    <div class="field"><label>ลำดับ</label><input name="sort" id="i_sort" inputmode="numeric" placeholder="ต่อท้าย"></div>
+    <div class="field"><button class="btn" id="i_btn">➕ เพิ่มรายการ</button></div>
+  </form>
+  <div class="help">ค่าวัดที่มี Spec: ระบบตัดสิน OK/NG ให้อัตโนมัติเมื่อช่างกรอกค่า</div>
+  {% endif %}
+</div>
+{% endif %}
+</div>
+<style>.tsel{display:block;padding:8px 10px;border-radius:10px;color:var(--text);margin-bottom:4px;border:1px solid transparent}.tsel:hover{text-decoration:none;background:var(--bg-soft)}.tsel.on{border-color:var(--accent);background:var(--blue-bg)}
+@media (max-width:900px){.grid[style*="2.2fr"]{grid-template-columns:1fr!important}}</style>
+{% endblock %}
+{% block scripts %}<script>
+function ed(it){for(const k of ['id','sort','section','text','kind','unit','spec_min','spec_max']){const e=document.getElementById('i_'+k);if(e)e.value=(it[k]??'');}
+document.getElementById('i_btn').textContent='💾 บันทึกการแก้ไข';document.getElementById('itf').scrollIntoView({behavior:'smooth'});}
+</script>{% endblock %}

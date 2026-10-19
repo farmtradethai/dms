@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ req.dr_no }} · {{ req.part_no }}{% endblock %}
+{% block content %}
+{% if created %}<div class="alert success">✅ บันทึกใบงาน <b>{{ req.dr_no }}</b> แล้ว — ระบบแจ้งเตือนผู้อนุมัติแล้ว</div>{% endif %}
+{% set flow = ['WAIT_FOREMAN','WAIT_LEADER','ASSIGNED','IN_PROGRESS','REPAIR_DONE','WAIT_QC','CLOSED'] %}
+{% set idx = flow.index(req.status) if req.status in flow else -1 %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h1 style="margin:0">{{ req.dr_no }} <span class="pill {{ STATUS_COLORS[req.status] }}" style="font-size:.95rem">{{ st(req.status) }}</span>
+        {% if req.is_emergency %}<span class="pill red">🔥 {{ t('emergency') }}</span>{% endif %}
+        {% if req.is_overdue %}<span class="pill red">⏰ {{ t('kpi_overdue') }}</span>{% endif %}
+        <span class="pill violet">{{ t('type_' ~ req.request_type) }}</span></h1>
+      {% if waiting_for %}<div style="margin:4px 0"><span class="pill amber">⏳ รอ: {{ waiting_for|join(', ') }}</span></div>{% endif %}
+      <div class="muted">{{ t('requester') }} {{ req.requester_name }} · {{ req.created_at|dt }} {% if req.legacy_id and req.legacy_id != req.dr_no %}· Legacy {{ req.legacy_id }}{% endif %}</div>
+    </div>
+    <div class="row">
+      <img src="/requests/{{ req.id }}/qr.png?size=3" class="qr-img hide-mobile" alt="QR" title="{{ base_url }}/r/{{ req.dr_no }}" style="height:64px">
+      <a href="/requests/{{ req.id }}/print" class="btn sec sm" target="_blank">🖨 {{ t('print') }}</a>
+      {% if req.request_type == 'PM' %}<a href="/requests/{{ req.id }}/pm-print" class="btn sec sm" target="_blank">🖨 PM Checklist</a>{% endif %}
+      {% if can_edit %}<a href="/requests/{{ req.id }}/edit" class="btn ghost sm">✏️ {{ t('edit') }}</a>{% endif %}
+    </div>
+  </div>
+  <div class="steps" style="margin-top:12px">
+    {% for s in flow %}<div class="{{ 'done' if idx > loop.index0 or req.status=='CLOSED' else 'now' if idx == loop.index0 else '' }} {{ 'bad' if req.status in ('RETURNED','NG_RETURN','FOREMAN_REJECTED','LEADER_REJECTED') and s in ('IN_PROGRESS','WAIT_FOREMAN','WAIT_LEADER') and loop.index0==(3 if req.status in ('RETURNED','NG_RETURN') else 0 if req.status=='FOREMAN_REJECTED' else 1) }}">{{ st(s) }}</div>{% endfor %}
+  </div>
+  {% if req.status in ('RETURNED','NG_RETURN') %}<div class="alert danger" style="margin-top:10px">↩ งานถูกส่งกลับ: <b>{{ req.tryout_result if req.status=='RETURNED' else req.qc_comment }}</b> — รอหัวหน้า Die มอบหมาย/ช่างรับงานซ่อมใหม่ (NG {{ req.ng_count }} ครั้ง, Try-out {{ req.tryout_count }} ครั้ง)</div>{% endif %}
+  {% if req.status in ('FOREMAN_REJECTED','LEADER_REJECTED') %}<div class="alert danger" style="margin-top:10px">✖ ไม่อนุมัติ: <b>{{ req.leader_comment if req.status=='LEADER_REJECTED' else req.foreman_comment }}</b> — ผู้แจ้งสามารถแก้ไขและส่งใหม่</div>{% endif %}
+  {% if req.status == 'IN_PROGRESS' %}<div style="margin-top:10px"><div class="row between"><b>{{ t('progress') }} {{ req.progress_pct }}%</b><small class="muted">{{ t('net_time') }}: {{ req.net_repair_minutes|minutes }}{% if my_open_log %} · ⏱ กำลังจับเวลา{% endif %}</small></div><div class="progress"><i style="width:{{ req.progress_pct }}%"></i></div></div>{% endif %}
+</div>
+
+<div class="grid g2" style="align-items:start">
+<div class="stack">
+  <!-- ======== ACTIONS ======== -->
+  {% if actions %}
+  <div class="card action-box">
+    <h3>⚡ {{ t('actions') }}</h3>
+    {% for a in actions %}
+      {% if a == 'foreman_approve' %}
+      <form method="post" action="/requests/{{ req.id }}/action/foreman_approve" class="stack"><label>{{ t('comment') }}</label><input name="comment" placeholder="ความเห็น Foreman/Engineer (ไม่บังคับ)"><button class="btn green lg">✅ {{ t('act_approve') }} (Foreman/Eng)</button></form>
+      {% elif a == 'foreman_reject' %}
+      <form method="post" action="/requests/{{ req.id }}/action/foreman_reject" class="row"><input name="comment" placeholder="เหตุผลที่ไม่อนุมัติ *" required style="flex:1"><button class="btn red">✖ {{ t('act_reject') }}</button></form>
+      {% elif a == 'leader_assign' %}
+      <form method="post" action="/requests/{{ req.id }}/action/leader_assign" class="stack">
+        <label>{{ t('technicians') }} <span class="req">*</span> <small class="muted">— เลือกได้หลายคน ดู workload ปัจจุบัน</small></label>
+        <div class="grid g2">
+        {% for b in board %}
+          <label class="check" style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)">
+            <input type="checkbox" name="tech_ids" value="{{ b.user.id }}" {{ 'checked' if b.user.id in (req.assignments|map(attribute='user_id')|list) }}>
+            <span>{% if b.user.is_online %}<span class="dot" style="background:var(--green)" title="ออนไลน์"></span> {% endif %}{{ b.user.full_name }}<br><small class="muted">{{ b.user.shift or '-' }} · งานค้าง {{ b.open }}{% if b.in_progress %} · กำลังซ่อม {{ b.in_progress }}{% endif %}{% if b.emergency %} · 🔥{{ b.emergency }}{% endif %}{% if b.user.skills %} · {{ b.user.skills }}{% endif %}</small></span></label>
+        {% endfor %}
+        </div>
+        <input name="comment" placeholder="คำสั่ง/หมายเหตุถึงช่าง">
+        <button class="btn green lg">👷 {{ t('act_assign') }}</button>
+      </form>
+      {% elif a == 'leader_reject' %}
+      <form method="post" action="/requests/{{ req.id }}/action/leader_reject" class="row"><input name="comment" placeholder="เหตุผลที่ไม่อนุมัติ *" required style="flex:1"><button class="btn red">✖ {{ t('act_reject') }}</button></form>
+      {% elif a == 'receive' %}
+      <form method="post" action="/requests/{{ req.id }}/action/receive" enctype="multipart/form-data" class="stack">
+        <label class="photo-input"><input type="file" name="photos" accept="image/*" capture="environment" multiple>📷 รูปก่อนซ่อม (Before) <span class="count muted"></span><div class="preview-strip"></div></label>
+        <button class="btn lg">▶ {{ t('act_receive') }}</button><div class="help">กดเมื่อเริ่มลงมือจริง — ระบบเริ่มจับเวลาซ่อม (หักเวลาพักอัตโนมัติ)</div></form>
+      {% elif a == 'complete' %}
+      {% if my_open_log %}<form method="post" action="/requests/{{ req.id }}/pause"><button class="btn amber">⏸ {{ t('act_pause') }}</button> <small class="muted">หยุดจับเวลาเมื่อต้องรออะไหล่/เปลี่ยนกะ</small></form>
+      {% else %}<form method="post" action="/requests/{{ req.id }}/resume"><button class="btn teal">▶ {{ t('act_resume') }}</button> <small class="muted">เริ่มจับเวลาต่อ</small></form>{% endif %}
+      <form method="post" action="/requests/{{ req.id }}/progress" class="row" style="margin-top:8px">
+        <select name="pct" style="width:auto">{% for p in [25,50,75,90] %}<option value="{{ p }}" {{ 'selected' if p>req.progress_pct and loop.first }}>{{ p }}%</option>{% endfor %}</select>
+        <input name="note" placeholder="บันทึกความคืบหน้า เช่น รออะไหล่ / เชื่อมเสร็จ รอเจียร" style="flex:1"><button class="btn sec">{{ t('act_update') }}</button></form>
+      <hr>
+      <form method="post" action="/requests/{{ req.id }}/action/complete" enctype="multipart/form-data" class="stack">
+        <b>ปิดงานซ่อม</b>
+        <div><label>{{ t('root_cause') }} <span class="req">*</span></label><select name="root_cause_id" required><option value="">-</option>{% for c in m.root_causes %}<option value="{{ c.id }}" {{ 'selected' if req.root_cause_id==c.id }}>{{ c.name_th }}</option>{% endfor %}</select></div>
+        <div><label>{{ t('action') }} <span class="req">*</span></label><textarea name="action_text" required placeholder="เช่น เปลี่ยน Insert ใหม่ 1 ก้อน, เจียรคมตัดใหม่, ชิม Button 0.4 mm">{{ req.action_text or '' }}</textarea></div>
+        <div class="grid g2"><div><label>{{ t('punch_length') }}</label><input name="punch_length_after" value="{{ req.punch_length_after or '' }}" placeholder="Std -2.0 mm"></div>
+        <div><label>{{ t('comment') }}</label><input name="comment"></div></div>
+        <label class="photo-input"><input type="file" name="photos" accept="image/*" capture="environment" multiple>📷 รูปหลังซ่อม (After) <span class="count muted"></span><div class="preview-strip"></div></label>
+        <button class="btn green lg">✔ {{ t('act_complete') }}</button></form>
+      {% elif a == 'tryout_accept' %}
+      <form method="post" action="/requests/{{ req.id }}/action/tryout_accept" enctype="multipart/form-data" class="stack">
+        <b>Production Try-out ครั้งที่ {{ req.tryout_count + 1 }}</b>
+        <div class="grid g2"><div><label>ผล / {{ t('comment') }}</label><input name="comment" placeholder="ทดลองผลิต OK"></div><div><label>{{ t('downtime') }}</label><input type="number" name="downtime_minutes" inputmode="numeric" placeholder="เครื่องหยุดกี่นาที"></div></div>
+        <label class="photo-input"><input type="file" name="photos" accept="image/*" capture="environment" multiple>📷 รูปชิ้นงาน Try-out <span class="count muted"></span><div class="preview-strip"></div></label>
+        <button class="btn green lg">✔ {{ t('act_tryout_ok') }}</button></form>
+      {% elif a == 'tryout_return' %}
+      <form method="post" action="/requests/{{ req.id }}/action/tryout_return" enctype="multipart/form-data" class="row"><input name="comment" placeholder="อาการที่ยังพบ *" required style="flex:1"><button class="btn red">↩ {{ t('act_tryout_return') }}</button></form>
+      {% elif a == 'qc_ok' %}
+      <form method="post" action="/requests/{{ req.id }}/action/qc_ok" enctype="multipart/form-data" class="stack">
+        <b>QC Judgement</b>
+        <input name="comment" placeholder="QC OK / ผลการตรวจ">
+        <label class="photo-input"><input type="file" name="photos" accept="image/*" capture="environment" multiple>📷 รูปผลตรวจ QC <span class="count muted"></span><div class="preview-strip"></div></label>
+        <button class="btn green lg">✔ {{ t('act_qc_ok') }}</button></form>
+      {% elif a == 'qc_ng' %}
+      <form method="post" action="/requests/{{ req.id }}/action/qc_ng" enctype="multipart/form-data" class="row"><input name="comment" placeholder="รายละเอียด NG *" required style="flex:1"><button class="btn red">✖ {{ t('act_qc_ng') }}</button></form>
+      {% elif a == 'submit' and req.status != 'DRAFT' %}
+      <form method="post" action="/requests/{{ req.id }}/action/submit" class="row"><input name="comment" placeholder="สิ่งที่แก้ไข" style="flex:1"><button class="btn">🔁 {{ t('act_resubmit') }}</button></form>
+      {% elif a == 'cancel' %}
+      <details><summary class="muted" style="cursor:pointer">{{ t('act_cancel') }}…</summary><form method="post" action="/requests/{{ req.id }}/action/cancel" class="row" style="margin-top:6px"><input name="comment" placeholder="เหตุผล *" required style="flex:1"><button class="btn ghost" data-confirm="ยืนยันยกเลิกใบงานนี้?">🗑 {{ t('act_cancel') }}</button></form></details>
+      {% elif a == 'reopen' %}
+      <form method="post" action="/requests/{{ req.id }}/action/reopen" class="row"><input name="comment" placeholder="เหตุผลเปิดงานใหม่" style="flex:1"><button class="btn ghost">↺ {{ t('act_reopen') }}</button></form>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if req.request_type == 'PM' and req.pm_checks %}
+  <!-- ======== PM CHECKLIST ======== -->
+  <div class="card" id="pmcheck">
+    <h3>✅ PM Checklist <small class="muted">({{ pmc.answered }}/{{ pmc.total }}{% if pmc.ng %} · <span style="color:var(--red)">NG {{ pmc.ng }}</span>{% endif %})</small>
+      {% if can_check and user.role != 'technician' %}<form method="post" action="/requests/{{ req.id }}/checklist/reset" style="margin-left:auto"><button class="btn sm ghost" data-confirm="โหลด checklist จากแม่แบบปัจจุบันใหม่? (คำตอบที่บันทึกไว้จะหายไป)">↻ โหลดใหม่</button></form>{% endif %}</h3>
+    <div class="progress" style="margin-bottom:10px"><i style="width:{{ pmc.pct }}%;{{ 'background:var(--green)' if pmc.done }}"></i></div>
+    {% if can_check %}<form method="post" action="/requests/{{ req.id }}/checklist">{% endif %}
+    <div class="pmc">
+    {% set ns = namespace(sec=None) %}
+    {% for c in req.pm_checks %}
+      {% if c.section != ns.sec %}{% set ns.sec = c.section %}<div class="pmc-sec">{{ c.section or 'ทั่วไป' }}</div>{% endif %}
+      <div class="pmc-row {{ 'ng' if c.result == 'NG' }}">
+        <div class="pmc-t">{{ c.text }}{% if c.kind == 'value' and (c.spec_min is not none or c.spec_max is not none) %} <small class="muted">(spec {{ c.spec_min if c.spec_min is not none else '' }}–{{ c.spec_max if c.spec_max is not none else '' }} {{ c.unit }})</small>{% endif %}
+          {% if c.user_name and not can_check %}<small class="muted"> · {{ c.user_name }}</small>{% endif %}</div>
+        {% if can_check %}
+          {% if c.kind == 'value' %}
+            <div class="pmc-in"><input name="v_{{ c.id }}" value="{{ c.value if c.value is not none else '' }}" inputmode="decimal" placeholder="{{ c.unit or 'ค่า' }}" style="width:110px">
+              <label class="seg"><input type="radio" name="r_{{ c.id }}" value="NA" {{ 'checked' if c.result=='NA' }}><span>N/A</span></label>
+              {% if c.result %}<span class="pill {{ 'green' if c.result=='OK' else 'red' if c.result=='NG' else 'gray' }}">{{ c.result }}</span>{% endif %}</div>
+          {% else %}
+            <div class="pmc-in">{% for v, cls in [('OK','ok'),('NG','ng'),('NA','na')] %}<label class="seg {{ cls }}"><input type="radio" name="r_{{ c.id }}" value="{{ v }}" {{ 'checked' if c.result==v }}><span>{{ 'N/A' if v=='NA' else v }}</span></label>{% endfor %}</div>
+          {% endif %}
+          <input class="pmc-note" name="n_{{ c.id }}" value="{{ c.note or '' }}" placeholder="หมายเหตุ{{ ' (ควรระบุเมื่อ NG)' }}">
+        {% else %}
+          <div class="pmc-in">{% if c.kind == 'value' and c.value is not none %}<b>{{ c.value }} {{ c.unit }}</b> {% endif %}{% if c.result %}<span class="pill {{ 'green' if c.result=='OK' else 'red' if c.result=='NG' else 'gray' }}">{{ c.result }}</span>{% else %}<span class="muted">—</span>{% endif %}</div>
+          {% if c.note %}<div class="pmc-note muted">{{ c.note }}</div>{% endif %}
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    {% if can_check %}<div class="row" style="margin-top:10px"><button class="btn">💾 บันทึก Checklist</button><button type="button" class="btn sm ghost" onclick="document.querySelectorAll('#pmcheck .seg.ok input').forEach(i=>{const n=i.name;if(!document.querySelector('#pmcheck input[name=&quot;'+n+'&quot;]:checked'))i.checked=true})">✔ ที่ยังว่างทั้งหมด = OK</button>
+      <small class="muted">ต้องตอบครบทุกข้อก่อนกด "ซ่อมเสร็จ"</small></div></form>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ======== DETAILS ======== -->
+  <div class="card">
+    <h3>📄 รายละเอียดใบงาน</h3>
+    <div class="signoff">
+      <div><b>{{ t('customer') }} / {{ t('model') }}</b>{{ req.customer or '-' }} / {{ req.model or '-' }}</div>
+      <div><b>{{ t('part_no') }}</b>{{ req.part_no }}</div>
+      <div><b>{{ t('part_name') }}</b>{{ req.part_name or '-' }}</div>
+      <div><b>{{ t('die_process') }}</b>{{ req.die_process }}</div>
+      <div><b>{{ t('die_code') }}</b>{% if req.die_id %}<a href="/dies/{{ req.die_id }}">{{ req.die_code or 'ดูทะเบียน' }}</a>{% else %}-{% endif %}</div>
+      <div><b>{{ t('line') }} / {{ t('machine') }}</b>{{ req.line or '-' }} / {{ req.machine_no or '-' }}</div>
+      <div><b>{{ t('required_day') }}</b>{{ req.required_day }} วัน → {{ req.target_date|d }}</div>
+      <div><b>{{ t('stock_oh') }}</b>{{ req.stock_oh if req.stock_oh is not none else '-' }} · {{ t('sample_part') }}: {{ t('yes') if req.sample_part else t('no') }}</div>
+      <div><b>{{ t('phone') }}</b>{{ req.requester_phone or '-' }}</div>
+      <div style="grid-column:1/-1"><b>{{ t('problem') }}</b><span style="font-size:1rem;font-weight:700">{{ req.problem_text }}</span>{% if req.other_details %}<br>{{ req.other_details }}{% endif %}</div>
+      {% if req.action_text or req.root_cause_text %}<div style="grid-column:1/-1;background:var(--green-bg)"><b>{{ t('root_cause') }} → {{ t('action') }}</b><span style="font-weight:700">{{ req.root_cause_text or '-' }}</span><br>{{ req.action_text or '-' }}{% if req.punch_length_after %}<br><small>Punch length: {{ req.punch_length_after }}</small>{% endif %}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- ======== PHOTOS ======== -->
+  <div class="card">
+    <h3>🖼️ {{ t('photos') }} <small class="muted">({{ req.attachments|length }})</small></h3>
+    {% for kind, label in [('PROBLEM','ปัญหา (Production)'),('BEFORE','ก่อนซ่อม'),('AFTER','หลังซ่อม'),('TRYOUT','Try-out'),('QC','QC'),('OTHER','อื่นๆ')] %}
+      {% if photos_by_kind[kind] %}
+      <div style="margin-bottom:10px"><b class="muted" style="font-size:.8rem">{{ label }}</b>
+        <div class="thumbs">
+        {% for a in photos_by_kind[kind] %}
+          <span class="thumb-w"><a href="{{ a.path|media if not a.is_archived else a.thumb_path|media }}" target="_blank" title="{{ a.uploaded_by }} {{ a.at|dt }} {{ a.note or '' }}"><img src="{{ a.thumb_path|media }}" loading="lazy"></a>
+            {% if user.is_admin or user.role in ('die_leader','foreman','manager') or a.uploaded_by == user.full_name %}<form method="post" action="/requests/{{ req.id }}/photo/{{ a.id }}/delete" class="thumb-del"><button class="btn red sm" data-confirm="ลบรูปนี้?" style="padding:1px 6px">✕</button></form>{% endif %}</span>
+        {% endfor %}
+        </div></div>
+      {% endif %}
+    {% endfor %}
+    {% if req.status not in ('CLOSED','CANCELLED') or user.is_admin %}
+    <form method="post" action="/requests/{{ req.id }}/photo" enctype="multipart/form-data" class="row">
+      <select name="kind" style="width:auto"><option value="PROBLEM">ปัญหา</option><option value="BEFORE">ก่อนซ่อม</option><option value="AFTER">หลังซ่อม</option><option value="TRYOUT">Try-out</option><option value="QC">QC</option><option value="OTHER">อื่นๆ</option></select>
+      <label class="photo-input" style="flex:1;padding:8px"><input type="file" name="photos" accept="image/*" capture="environment" multiple required>📷 {{ t('add_photo') }} <span class="count muted"></span><div class="preview-strip"></div></label>
+      <button class="btn sec">{{ t('save') }}</button></form>
+    {% endif %}
+  </div>
+
+  <!-- ======== SPARE PARTS ======== -->
+  <div class="card" id="parts">
+    <h3>🔩 {{ t('spare_parts') }} <small class="muted">· {{ t('parts_cost') }} {{ req.parts_cost|money }} ฿</small>
+      {% if spare_url %}<a href="{{ spare_url }}/?dr={{ req.dr_no }}" target="_blank" class="btn sm sec" style="margin-left:auto">↗ เปิดโปรแกรมอะไหล่</a>{% endif %}</h3>
+    {% if req.parts %}
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Part</th><th class="num">Qty</th><th class="num">฿/หน่วย</th><th class="num">รวม</th><th>ที่มา</th><th></th></tr></thead><tbody>
+    {% for p in req.parts %}<tr><td><b>{{ p.part_no }}</b><br><small>{{ p.part_name }}</small></td><td class="num">{{ p.qty|round(2) }} {{ p.uom }}</td><td class="num">{{ p.unit_cost|money }}</td><td class="num">{{ p.total_cost|money }}</td><td><small>{{ p.source }} {{ p.ref_no or '' }}<br>{{ p.user_name }} {{ p.at|dt }}</small></td>
+      <td>{% if can_parts %}<form method="post" action="/requests/{{ req.id }}/parts/{{ p.id }}/delete"><button class="btn ghost sm" data-confirm="ลบ?">✕</button></form>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% endif %}
+    {% if can_parts %}
+    <form method="post" action="/requests/{{ req.id }}/parts" class="grid g4" style="margin-top:8px;align-items:end" id="partform">
+      <div><label>Part No <a href="/scan?rid={{ req.id }}" class="muted">📷 สแกน</a></label><input name="part_no" required placeholder="SP-000458"></div>
+      <div><label>ชื่ออะไหล่</label><input name="part_name"></div>
+      <div class="row"><div style="flex:1"><label>Qty</label><input type="number" step="0.01" name="qty" value="1"></div><div style="flex:1"><label>฿/หน่วย</label><input type="number" step="0.01" name="unit_cost" value="0"></div></div>
+      <div class="row"><div style="flex:1"><label>เลขใบเบิก</label><input name="ref_no"></div><input type="hidden" name="source" value="MANUAL"><button class="btn sec">+ เพิ่ม</button></div>
+    </form>
+    <div class="help">เมื่อโปรแกรม Die Spare Part เบิกโดยอ้าง DR No. นี้ รายการจะปรากฏที่นี่อัตโนมัติผ่าน API</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="stack">
+  <!-- ======== SIGN-OFF / TIMES ======== -->
+  <div class="card">
+    <h3>🧾 ผู้รับผิดชอบแต่ละขั้น</h3>
+    <div class="signoff">
+      <div><b>1. Request</b>{{ req.requester_name }}<br><small>{{ req.created_at|dt }}</small></div>
+      <div><b>2. Foreman/Eng</b>{{ req.foreman.full_name if req.foreman else '-' }}<br><small>{{ req.foreman_at|dt }} {{ req.foreman_comment or '' }}</small></div>
+      <div><b>3. Die Leader</b>{{ req.leader.full_name if req.leader else '-' }}<br><small>{{ req.leader_at|dt }} {{ req.leader_comment or '' }}</small></div>
+      <div><b>4. Technician</b>{{ req.technician_names or '-' }}<br><small>รับ {{ req.tech_received_at|dt }}<br>เสร็จ {{ req.tech_completed_at|dt }}</small></div>
+      <div><b>5. Try-out</b>{{ req.tryout_by.full_name if req.tryout_by else '-' }}<br><small>{{ req.tryout_at|dt }} {{ req.tryout_result or '' }} (×{{ req.tryout_count }})</small></div>
+      <div><b>6. QC</b>{{ req.qc_by.full_name if req.qc_by else '-' }} {% if req.qc_result %}<span class="pill {{ 'green' if req.qc_result=='OK' else 'red' }}">{{ req.qc_result }}</span>{% endif %}<br><small>{{ req.qc_at|dt }} {{ req.qc_comment or '' }}</small></div>
+    </div>
+    <hr>
+    <div class="grid g3">
+      <div class="kpi violet" style="padding:10px"><div class="v" style="font-size:1.2rem">{{ req.net_repair_minutes|minutes }}</div><div class="l">{{ t('net_time') }}</div></div>
+      <div class="kpi" style="padding:10px"><div class="v" style="font-size:1.2rem">{{ req.downtime_minutes|minutes if req.downtime_minutes else '-' }}</div><div class="l">Downtime</div></div>
+      <div class="kpi amber" style="padding:10px"><div class="v" style="font-size:1.2rem">{{ req.parts_cost|money }}</div><div class="l">{{ t('parts_cost') }} ฿</div></div>
+    </div>
+    {% if req.work_logs %}<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">เวลาทำงานจริง ({{ req.work_logs|length }} ช่วง)</summary>
+      <table class="tbl"><tr><th>ช่าง</th><th>เริ่ม</th><th>หยุด</th><th class="num">สุทธิ</th></tr>{% for w in req.work_logs %}<tr><td>{{ w.user_name }}</td><td>{{ w.start_at|dt }}</td><td>{{ w.end_at|dt if w.end_at else '⏱ กำลังทำ' }}</td><td class="num">{{ w.net_minutes }} น.</td></tr>{% endfor %}</table></details>{% endif %}
+  </div>
+
+  <!-- ======== TIMELINE ======== -->
+  <div class="card">
+    <h3>🕒 ประวัติสถานะ</h3>
+    <ul class="timeline">
+    {% for h in req.history|reverse %}
+      <li class="{{ 'done' if h.to_status in ('CLOSED',) else 'bad' if h.to_status in ('FOREMAN_REJECTED','LEADER_REJECTED','RETURNED','NG_RETURN','CANCELLED') else '' }}">
+        <div><b>{{ st(h.to_status) }}</b> <small class="muted">· {{ h.user_name }} · {{ h.at|dt }}</small>{% if h.comment %}<div class="muted" style="font-size:.85rem">“{{ h.comment }}”</div>{% endif %}</div></li>
+    {% endfor %}
+    {% for p in req.progress_logs|reverse %}<li><div>{{ p.pct }}% <small class="muted">· {{ p.user_name }} · {{ p.at|dt }}</small>{% if p.note %}<div class="muted" style="font-size:.85rem">{{ p.note }}</div>{% endif %}</div></li>{% endfor %}
+    </ul>
+  </div>
+
+  {% if history_die %}
+  <div class="card">
+    <h3>🧰 ประวัติแม่พิมพ์นี้ <a href="/dies/{{ req.die_id }}" class="btn sm sec" style="margin-left:auto">ทั้งหมด</a></h3>
+    {% for h in history_die %}<a href="/requests/{{ h.id }}" class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);color:var(--text)"><span><b>{{ h.dr_no }}</b> {{ h.problem_text }} <small class="muted">→ {{ h.root_cause_text or '' }}</small></span><span class="pill {{ STATUS_COLORS[h.status] }}">{{ h.created_at|d }}</span></a>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="card only-mobile" style="text-align:center"><img src="/requests/{{ req.id }}/qr.png?size=5" class="qr-img" alt="QR"><div class="muted">{{ req.dr_no }}</div></div>
+</div>
+</div>
+{% endblock %}

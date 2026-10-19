@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_dies') }}{% endblock %}
+{% block content %}
+<form class="card tight" data-autosubmit><div class="row">
+  <input name="q" value="{{ q }}" placeholder="🔍 Part No / Part Name / Die Code / Process / Model" style="flex:2;min-width:200px">
+  <select name="customer" style="width:auto"><option value="">{{ t('customer') }}</option>{% for c in customers %}<option {{ 'selected' if customer==c }}>{{ c }}</option>{% endfor %}</select>
+  <select name="line" style="width:auto"><option value="">{{ t('line') }}</option>{% for l in lines %}<option {{ 'selected' if line==l }}>{{ l }}</option>{% endfor %}</select>
+  <select name="pm" style="width:auto"><option value="">PM: {{ t('all') }}</option><option value="yes" {{ 'selected' if pm=='yes' }}>มีแผน PM</option></select>
+  <button class="btn sm">{{ t('search') }}</button><span class="muted">{{ total }} แม่พิมพ์</span>
+  {% if user.role in ('die_leader','admin','superadmin','manager','foreman') %}<a href="#" data-toggle="newdie" class="btn sm sec">+ เพิ่มแม่พิมพ์</a> <a href="/admin/import" class="btn sm sec">⬆ นำเข้า CSV/Excel</a> <a href="/admin/export/dies.xlsx" class="btn sm sec">⬇ Export Excel</a>{% endif %}
+</div></form>
+<div class="card" id="newdie" style="display:none">
+  <form method="post" action="/dies" class="grid g4" style="align-items:end">
+    <div><label>Part No *</label><input name="part_no" required></div><div><label>Die Process *</label><input name="die_process" required placeholder="OP10 Progressive"></div>
+    <div><label>Die Code</label><input name="die_code"></div><div><label>Part Name</label><input name="part_name"></div>
+    <div><label>Customer</label><input name="customer" list="cust"><datalist id="cust">{% for c in customers %}<option>{{ c }}</option>{% endfor %}</datalist></div><div><label>Model</label><input name="model"></div>
+    <div><label>Line</label><input name="line" list="ln"><datalist id="ln">{% for l in lines %}<option>{{ l }}</option>{% endfor %}</datalist></div><div><label>รอบ PM (วัน)</label><div class="row"><input type="number" name="pm_interval_days" value="0"><button class="btn">บันทึก</button></div></div>
+  </form>
+</div>
+<div class="tbl-wrap card tight"><table class="tbl responsive">
+<thead><tr><th>Die Code</th><th>Part No</th><th>Part Name</th><th>Process</th><th>Customer / Model</th><th>Line</th><th>PM</th><th></th></tr></thead><tbody>
+{% for d in rows %}<tr style="{{ 'opacity:.5' if not d.is_active }}">
+  <td data-l="Die Code"><a href="/dies/{{ d.id }}"><b>{{ d.die_code or '—' }}</b></a></td><td data-l="Part No">{{ d.part_no }}</td><td data-l="Part Name"><small>{{ d.part_name or '' }}</small></td>
+  <td data-l="Process">{{ d.die_process }}</td><td data-l="Customer">{{ d.customer or '-' }} / {{ d.model or '-' }}</td><td data-l="Line">{{ d.line or '-' }}</td>
+  <td data-l="PM">{% if d.pm_interval_days %}ทุก {{ d.pm_interval_days }} วัน<br><small class="{{ 'pill red' if d.pm_next_date and d.pm_next_date < today else 'muted' }}">ถัดไป {{ d.pm_next_date|d }}</small>{% else %}<span class="muted">-</span>{% endif %}</td>
+  <td><a href="/requests/new?die_id={{ d.id }}" class="btn sm">แจ้งซ่อม</a></td></tr>
+{% endfor %}</tbody></table></div>
+{% if pages > 1 %}<div class="row" style="justify-content:center;margin-top:10px">{% for p in range(1, pages+1) %}{% if p==page %}<b class="tag">{{ p }}</b>{% elif p<=2 or p>pages-2 or (p>=page-2 and p<=page+2) %}<a class="tag" href="?q={{ q }}&customer={{ customer }}&line={{ line }}&pm={{ pm }}&page={{ p }}">{{ p }}</a>{% endif %}{% endfor %}</div>{% endif %}
+{% endblock %}

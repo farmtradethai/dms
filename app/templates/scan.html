@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_scan') }}{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card">
+  <h3>📷 สแกน QR / Barcode</h3>
+  {% if req %}<div class="alert info">กำลังเพิ่มอะไหล่ให้ใบงาน <b>{{ req.dr_no }}</b> — สแกน QR อะไหล่ (Part ID) แล้วระบบจะกรอกให้</div>{% endif %}
+  <div class="scan-box" id="reader"></div>
+  <div class="row" style="margin-top:10px">
+    <input id="manual" placeholder="หรือพิมพ์รหัส: DR No / AHMD… / Die Code / Part ID" style="flex:1">
+    <button class="btn" onclick="lookup(document.getElementById('manual').value)">ไป</button>
+  </div>
+  <div id="result" style="margin-top:12px"></div>
+  <p class="help">QR ใบงาน (DR No.) → เปิดใบงาน · QR แม่พิมพ์ (Die Code / Part No) → เปิดทะเบียน/แจ้งซ่อม · QR อะไหล่ → ดึงข้อมูลจากโปรแกรม Die Spare Part{% if not spare_url %} (ยังไม่ตั้งค่า URL ที่ Admin › Settings){% endif %}</p>
+</div>
+<div class="card">
+  <h3>ℹ️ การใช้งาน QR</h3>
+  <ol style="padding-left:18px;line-height:1.8">
+    <li><b>ใบงาน</b>: พิมพ์ใบ Request แล้ว QR อยู่มุมขวาบน สแกนเพื่อเปิดรายละเอียด / อัปเดตสถานะ</li>
+    <li><b>แม่พิมพ์</b>: ติด QR Die Code ที่แม่พิมพ์ สแกนแล้วกดแจ้งซ่อมได้ทันที ไม่ต้องเลือก Customer/Model/Part</li>
+    <li><b>อะไหล่</b>: สแกน QR จากโปรแกรม Die Spare Part → ผูกต้นทุนเข้า DR อัตโนมัติ</li>
+  </ol>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/html5-qrcode.min.js"></script>
+<script>
+const RID = {{ req.id if req else 'null' }};
+async function lookup(code) {
+  if (!code) return;
+  const res = document.getElementById('result');
+  res.innerHTML = '<span class="muted">กำลังค้นหา…</span>';
+  const d = await fetch('/api/lookup?code=' + encodeURIComponent(code)).then(r => r.json());
+  if (d.type === 'request') { location.href = d.url; return; }
+  if (d.type === 'die' && new URLSearchParams(location.search).get('next') === 'strokes') { location.href = '/pm/strokes?die_id=' + d.die.id; return; }
+  if (d.type === 'die') { res.innerHTML = `<div class="alert success">แม่พิมพ์ <b>${d.die.part_no} / ${d.die.die_process}</b> ${d.die.die_code||''}<br><a class="btn" href="/requests/new?die_id=${d.die.id}">📝 แจ้งซ่อมแม่พิมพ์นี้</a> <a class="btn sec" href="/pm/strokes?die_id=${d.die.id}">🔢 บันทึก Stroke</a> <a class="btn sec" href="${d.url}">ทะเบียน / PM</a></div>`; return; }
+  if (d.type === 'part') {
+    const p = d.part;
+    res.innerHTML = `<div class="alert success"><b>${p.part_no||code}</b> ${p.part_name||''}<br>คงเหลือ ${p.on_hand ?? '-'} · ราคา ${p.unit_cost ?? '-'} ฿ · ${p.location||''}` +
+      (RID ? `<form method="post" action="/requests/${RID}/parts" class="row" style="margin-top:8px"><input type="hidden" name="part_no" value="${p.part_no||code}"><input type="hidden" name="part_name" value="${p.part_name||''}"><input type="hidden" name="unit_cost" value="${p.unit_cost||0}"><input type="hidden" name="source" value="SCAN"><input type="number" name="qty" value="1" step="0.01" style="width:90px"><button class="btn green">+ เพิ่มเข้าใบงาน</button></form>` : '') + `</div>`;
+    return;
+  }
+  res.innerHTML = `<div class="alert warn">ไม่พบรหัส <b>${code}</b> ${d.error||''}` + (RID ? `<form method="post" action="/requests/${RID}/parts" class="row" style="margin-top:8px"><input type="hidden" name="part_no" value="${code}"><input type="hidden" name="source" value="SCAN"><input name="part_name" placeholder="ชื่ออะไหล่" style="flex:1"><input type="number" name="qty" value="1" style="width:80px"><input type="number" name="unit_cost" value="0" placeholder="฿" style="width:90px"><button class="btn">เพิ่มเอง</button></form>` : '') + `</div>`;
+}
+try {
+  const h = new Html5Qrcode("reader");
+  let busy = false;
+  h.start({ facingMode: "environment" }, { fps: 8, qrbox: 230 }, txt => { if (busy) return; busy = true; h.pause(true); lookup(txt).finally(() => setTimeout(() => { busy = false; h.resume(); }, 2500)); })
+   .catch(e => document.getElementById('reader').innerHTML = '<div style="color:#fff;padding:20px">เปิดกล้องไม่ได้ (' + e + ') — พิมพ์รหัสด้านล่างแทน</div>');
+} catch (e) {}
+</script>
+{% endblock %}

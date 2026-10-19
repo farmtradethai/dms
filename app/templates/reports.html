@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ t('menu_reports') }}{% endblock %}
+{% block content %}
+<form class="card tight">
+  <div class="row">
+    <input type="date" name="dfrom" value="{{ dfrom }}" style="width:auto"><input type="date" name="dto" value="{{ dto }}" style="width:auto">
+    <select name="rtype" style="width:auto"><option value="">{{ t('request_type') }}: {{ t('all') }}</option>{% for ty in REQUEST_TYPES %}<option value="{{ ty }}" {{ 'selected' if rtype==ty }}>{{ t('type_' ~ ty) }}</option>{% endfor %}</select>
+    <select name="line" style="width:auto"><option value="">{{ t('line') }}</option>{% for l in lines %}<option {{ 'selected' if line==l }}>{{ l }}</option>{% endfor %}</select>
+    <select name="customer" style="width:auto"><option value="">{{ t('customer') }}</option>{% for c in customers %}<option {{ 'selected' if customer==c }}>{{ c }}</option>{% endfor %}</select>
+    <select name="status" style="width:auto"><option value="">{{ t('status') }}</option><option value="open" {{ 'selected' if status=='open' }}>ค้างทั้งหมด</option>{% for s in ST.values() %}<option value="{{ s }}" {{ 'selected' if status==s }}>{{ st(s) }}</option>{% endfor %}</select>
+    <select name="tech" style="width:auto"><option value="">{{ t('technician') }}</option>{% for x in techs %}<option {{ 'selected' if tech==x }}>{{ x }}</option>{% endfor %}</select>
+    <button class="btn sm">{{ t('filter') }}</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <span class="muted">{{ total }} รายการ</span>
+    {% set qs = 'dfrom=' ~ dfrom ~ '&dto=' ~ dto ~ '&rtype=' ~ rtype ~ '&line=' ~ line ~ '&customer=' ~ customer ~ '&status=' ~ status ~ '&tech=' ~ tech %}
+    <a class="btn sm green" href="/reports?{{ qs }}&fmt=xlsx">⬇ {{ t('export_excel') }} (+สรุปทุกมิติ)</a>
+    <a class="btn sm sec" href="/reports?{{ qs }}&fmt=csv">⬇ {{ t('export_csv') }}</a>
+    <a class="btn sm red" href="/reports?{{ qs }}&fmt=pdf">⬇ {{ t('export_pdf') }}</a>
+    <button type="button" class="btn sm sec" onclick="window.print()">🖼 ภาพ/พิมพ์</button>
+    <a class="btn sm sec" href="/admin/import/template.xlsx">⬇ Template นำเข้าข้อมูลเก่า</a>
+  </div>
+</form>
+<div class="grid g4">{% for k, v in kpis.items() %}<div class="kpi"><div class="v" style="font-size:1.4rem">{{ v }}</div><div class="l">{{ k }}</div></div>{% endfor %}</div>
+<div class="grid g2" style="margin-top:12px">
+  <div class="card"><h3>แนวโน้มรายเดือน</h3><div class="chart-box"><canvas id="c_m"></canvas></div></div>
+  <div class="card"><h3>สัดส่วน Required Day (ความเร่งด่วนที่หน้างานเลือก)</h3><div class="chart-box"><canvas id="c_rd"></canvas></div></div>
+  <div class="card tight"><h3>ปัญหา (Production)</h3><table class="tbl">{% for k, n in b.by_problem[:12] %}<tr><td>{{ k }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table></div>
+  <div class="card tight"><h3>สาเหตุ (Die MT)</h3><table class="tbl">{% for k, n in b.by_root_cause[:12] %}<tr><td>{{ k }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table></div>
+  <div class="card tight"><h3>ลูกค้า</h3><table class="tbl">{% for k, n in b.by_customer[:12] %}<tr><td>{{ k }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table></div>
+  <div class="card tight"><h3>แม่พิมพ์ซ่อมบ่อย</h3><table class="tbl">{% for k, n in b.by_die[:12] %}<tr><td>{{ k }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="card tight"><h3>รายการ (แสดง 300 แรก — Export เพื่อดูทั้งหมด)</h3>
+<div class="tbl-wrap"><table class="tbl responsive"><thead><tr><th>DR</th><th>วันที่</th><th>ประเภท</th><th>Line</th><th>ลูกค้า</th><th>Part / Process</th><th>ปัญหา → สาเหตุ</th><th>ช่าง</th><th class="num">ซ่อมสุทธิ</th><th>QC</th><th>สถานะ</th></tr></thead><tbody>
+{% for r in rows %}<tr><td data-l="DR"><a href="/requests/{{ r.id }}">{{ r.dr_no }}</a></td><td data-l="วันที่">{{ r.created_at|dt }}</td><td data-l="ประเภท">{{ r.request_type }}</td><td data-l="Line">{{ r.line }}</td><td data-l="ลูกค้า">{{ r.customer }}</td><td data-l="Part">{{ r.part_no }}<br><small class="muted">{{ r.die_process }}</small></td><td data-l="ปัญหา">{{ r.problem_text }}<br><small class="muted">{{ r.root_cause_text or '' }}</small></td><td data-l="ช่าง"><small>{{ r.technician_names }}</small></td><td class="num" data-l="ซ่อม">{{ r.net_repair_minutes|minutes if r.net_repair_minutes else '-' }}</td><td data-l="QC">{{ r.qc_result or '-' }}</td><td data-l="สถานะ"><span class="pill {{ STATUS_COLORS[r.status] }}">{{ st(r.status) }}</span></td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/chart.umd.min.js"></script>
+<script>
+const B = {{ tojson(b)|safe }}; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+new Chart(document.getElementById('c_m'), { type: 'bar', data: { labels: B.months.map(m => ym(m.month)), datasets: [{ label: 'งาน', data: B.months.map(m => m.repair + m.pm + m.accident), backgroundColor: acc, borderRadius: 5 }, { type: 'line', label: 'ปิดงาน', data: B.months.map(m => m.closed), borderColor: '#1d9a5b', tension: .3 }, { type: 'line', label: 'MTTR นาที', data: B.months.map(m => m.mttr), borderColor: '#c77d00', yAxisID: 'y2', tension: .3 }] }, options: { maintainAspectRatio: false, scales: { y2: { position: 'right', grid: { display: false } } } } });
+new Chart(document.getElementById('c_rd'), { type: 'pie', data: { labels: B.by_required_day.map(x => x[0] + ' วัน'), datasets: [{ data: B.by_required_day.map(x => x[1]), backgroundColor: ['#d13a3a', '#c77d00', '#1f5fbf', '#1d9a5b', '#6b7686'] }] }, options: { maintainAspectRatio: false } });
+</script>
+{% endblock %}

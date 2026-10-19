@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block pagetitle %}แนะนำรอบ PM{% endblock %}
+{% block content %}
+{% include "_pm_nav.html" %}
+{% set lead = user.role in ('die_leader','admin','superadmin','manager') %}
+<div class="alert info">ระบบอ่านประวัติแจ้งซ่อม 12 เดือนล่าสุด หาแม่พิมพ์ที่เสีย ≥ 3 ครั้ง แล้วแนะนำรอบ PM = <b>70% ของ MTBF</b> (ระยะเวลาเฉลี่ยระหว่างเสีย) ปัดเป็นสัปดาห์ 7–180 วัน — PM ก่อนถึงช่วงที่มักจะเสีย
+  · แม่พิมพ์ที่มีแผนอยู่แล้วแต่รอบยาวกว่าที่ควรก็จะแสดงด้วย</div>
+<form method="post" action="/pm/suggest/apply" class="card tight">
+  <div class="row between" style="margin-bottom:8px"><h3 style="margin:0">💡 แม่พิมพ์ที่ควรมี / ควรปรับแผน PM ({{ rows|length }})</h3>
+    {% if lead and rows %}<div class="row"><label class="check"><input type="checkbox" onclick="document.querySelectorAll('input[name=die_id]').forEach(c=>c.checked=this.checked)"> เลือกทั้งหมด</label><button class="btn green" data-confirm="ตั้งรอบ PM ให้แม่พิมพ์ที่เลือก?">✅ ตั้งแผน PM ให้ที่เลือก</button></div>{% endif %}</div>
+  <div class="tbl-wrap"><table class="tbl responsive">
+    <thead><tr>{% if lead %}<th></th>{% endif %}<th>แม่พิมพ์</th><th>Line</th><th class="num">เสีย (12 เดือน)</th><th class="num">MTBF (วัน)</th><th>ตอนนี้</th><th>รอบที่แนะนำ (วัน)</th></tr></thead><tbody>
+    {% for r in rows %}{% set d = r.die %}
+    <tr>{% if lead %}<td><input type="checkbox" name="die_id" value="{{ d.id }}"></td>{% endif %}
+      <td data-l="แม่พิมพ์"><a href="/dies/{{ d.id }}#pm"><b>{{ d.part_no }}</b></a> · {{ d.die_process }}<br><small class="muted">{{ d.customer or '' }} {{ d.part_name or '' }}</small></td>
+      <td data-l="Line">{{ d.line or '-' }}</td><td data-l="เสีย" class="num"><b>{{ r.repairs }}</b></td><td data-l="MTBF" class="num">{{ r.mtbf }}</td>
+      <td data-l="ตอนนี้"><small>{{ r.why }}</small></td>
+      <td data-l="แนะนำ">{% if lead %}<input type="number" min="1" name="days_{{ d.id }}" value="{{ r.suggest }}" style="width:90px">{% else %}<b>{{ r.suggest }}</b>{% endif %} วัน</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">ไม่พบแม่พิมพ์ที่เสียบ่อยโดยไม่มีแผน PM 👍</td></tr>{% endfor %}
+    </tbody></table></div>
+  <p class="help">เมื่อตั้งแผนแล้ว ครั้งถัดไป = PM ล่าสุด + รอบ (ถ้าไม่เคย PM = นับจากวันนี้) · แก้ทีละตัวได้ที่หน้าแม่พิมพ์ · การเปลี่ยนแผนถูกบันทึกในประวัติแม่พิมพ์</p>
+</form>
+{% endblock %}

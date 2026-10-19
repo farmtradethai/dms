@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_avatar.html" import avatar %}
+{% block pagetitle %}ผังผู้อนุมัติ{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+
+<div class="card">
+  <h3>🧭 ผังผู้อนุมัติของ {{ company.code }}</h3>
+  <p class="muted" style="margin:0 0 10px">กำหนดว่า <b>ใคร</b> อนุมัติขั้นไหน ของ <b>Line ไหน</b> — ใช้กับปุ่มอนุมัติ, แท็บ "รอฉันอนุมัติ", อีเมล/กระดิ่งแจ้งเตือน และการเตือนงานค้าง
+  ผู้ที่ไม่ได้อยู่ในผังจะ<b>ไม่เห็นปุ่มอนุมัติ</b>และไม่ได้รับแจ้ง (Admin / Manager อนุมัติแทนได้ และระบบบันทึกว่า "อนุมัติแทน")</p>
+  <form method="post" action="/admin/approvers" class="grid g4" style="align-items:end">
+    <div class="field"><label>ขั้นตอน</label><select name="step" required>{% for k, s in STEPS.items() %}<option value="{{ k }}">{{ s.order }}. {{ s.th }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Line (เลือกได้หลาย Line · Ctrl/⌘)</label>
+      <select name="line" multiple size="4"><option value="" selected>— ทุก Line —</option>{% for l in lines %}<option>{{ l }}</option>{% endfor %}</select></div>
+    <div class="field"><label>ผู้อนุมัติ (เลือกได้หลายคน)</label>
+      <select name="user_ids" multiple size="4" required>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name }} · {{ t('role_' ~ u.role) }}{{ ' · ' ~ u.line if u.line }}</option>{% endfor %}</select></div>
+    <div class="field"><label class="check"><input type="checkbox" name="is_backup" value="1"> ผู้อนุมัติสำรอง</label>
+      <div class="help" style="margin-bottom:8px">สำรอง = อนุมัติได้ แต่จะได้รับแจ้งเฉพาะตอนเตือนงานค้าง</div>
+      <button class="btn">➕ เพิ่มในผัง</button></div>
+  </form>
+</div>
+
+{% if warnings %}<div class="alert warn"><b>⚠️ ต้องตรวจสอบ</b><ul style="margin:6px 0 0;padding-left:18px">{% for w in warnings[:12] %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+
+<div class="card tight">
+  <div class="row between" style="margin-bottom:8px">
+    <h3 style="margin:0">ผลลัพธ์ที่ระบบใช้จริง (Line × ขั้นตอน)</h3>
+    <small class="muted"><span class="pill blue">กฎ</span> ตาม Line · <span class="pill violet">ทุก Line</span> กฎที่ไม่ระบุ Line · <span class="pill gray">อัตโนมัติ</span> ยังไม่มีกฎ ใช้บทบาท + Line ประจำ · 🅑 = สำรอง · ⚠✉ = ไม่มีอีเมล</small>
+  </div>
+  <div class="tbl-wrap"><table class="tbl cov">
+    <thead><tr><th>Line</th>{% for k, s in STEPS.items() %}<th>{{ s.order }}. {{ s.th }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for line, cells in cov %}<tr><td><b>{{ line or '(ไม่ระบุ Line)' }}</b></td>
+      {% for k in STEPS %}<td>
+        {% set ppl = cells[k] %}
+        {% if ppl|length <= 3 %}{% for u, backup, src in ppl %}<div class="who">{{ avatar(u, 24) }} <span>{{ u.full_name }}{% if backup %} 🅑{% endif %}{% if not u.email %} <span title="ไม่มีอีเมล" style="color:var(--amber)">⚠✉</span>{% endif %}</span></div>{% endfor %}
+        {% else %}<div class="who" title="{{ ppl|map(attribute=0)|map(attribute='full_name')|join(', ') }}">{% for u, backup, src in ppl[:4] %}{{ avatar(u, 26) }}{% endfor %}<span><b>{{ ppl|length }} คน</b></span></div>
+          <details><summary class="src" style="cursor:pointer">ดูรายชื่อ</summary>{% for u, backup, src in ppl %}<div style="font-size:.8rem">{{ u.full_name }}{% if backup %} 🅑{% endif %}{% if not u.email %} <span style="color:var(--amber)">⚠✉</span>{% endif %}</div>{% endfor %}</details>{% endif %}
+        {% if not ppl %}{% if k == 'TRYOUT' %}<small class="muted">ผู้แจ้ง</small>{% else %}<span class="pill red">ไม่มี</span>{% endif %}{% endif %}
+        {% if cells[k] %}<span class="pill {{ {'rule':'blue','all-lines rule':'violet','auto':'gray'}[cells[k][0][2]] }}" style="font-size:.66rem">{{ {'rule':'กฎ','all-lines rule':'ทุก Line','auto':'อัตโนมัติ'}[cells[k][0][2]] }}</span>{% endif %}
+        {% if k == 'TRYOUT' and cells[k] %}<div class="src">+ ผู้แจ้งใบงาน</div>{% endif %}
+      </td>{% endfor %}</tr>{% endfor %}
+    </tbody></table></div>
+</div>
+
+<div class="grid g2" style="align-items:start">
+<div class="card tight">
+  <h3>📋 กฎทั้งหมด ({{ rules|length }})</h3>
+  {% if not rules %}<p class="muted">ยังไม่มีกฎ — ระบบใช้ "บทบาท + Line ประจำ" ของผู้ใช้อัตโนมัติ (ตารางด้านบน)</p>
+  <form method="post" action="/admin/approvers/autofill"><button class="btn sec">⚡ สร้างผังจากบทบาท + Line ประจำ ปัจจุบัน แล้วค่อยแก้</button></form>{% endif %}
+  <div class="tbl-wrap"><table class="tbl">
+    {% for r in rules %}<tr><td><small>{{ STEPS[r.step].order }}. {{ STEPS[r.step].th }}</small></td><td>{{ r.line or 'ทุก Line' }}</td>
+      <td>{% if r.user %}<span class="who">{{ avatar(r.user, 24) }} {{ r.user.full_name }}</span>{% if not r.user.is_active %} <span class="pill gray">ระงับ</span>{% endif %}{% endif %}</td>
+      <td><form method="post" action="/admin/approvers/toggle/{{ r.id }}" style="display:inline"><button class="chip {{ 'amber' if r.is_backup }}" title="สลับหลัก/สำรอง">{{ 'สำรอง' if r.is_backup else 'หลัก' }}</button></form></td>
+      <td><form method="post" action="/admin/approvers/{{ r.id }}/delete" style="display:inline"><button class="btn sm ghost" data-confirm="ลบกฎนี้?">🗑</button></form></td></tr>{% endfor %}
+  </table></div>
+  <div class="help">นำเข้าเป็นชุดได้ที่ <a href="/admin/setup">🚀 เริ่มต้นบริษัท</a> (ชีต 7_Approvers)</div>
+</div>
+<div class="card">
+  <h3>👁 ผู้อนุมัติเห็นใบงานแค่ไหน</h3>
+  <form method="post" action="/admin/approvers/visibility">
+    <label class="check" style="display:block;margin-bottom:8px"><input type="radio" name="vis" value="own" {{ 'checked' if vis=='own' }}> <b>เฉพาะของตัวเอง</b> (แนะนำ) — Foreman / หัวหน้า Die / QC เห็นเฉพาะใบงานของ Line ที่ตนเป็นผู้อนุมัติ + ใบงานที่ตนเคยดำเนินการ; ใครอนุมัติทุก Line จะเห็นทั้งหมด</label>
+    <label class="check" style="display:block;margin-bottom:10px"><input type="radio" name="vis" value="all" {{ 'checked' if vis=='all' }}> <b>ทั้งบริษัท</b> — เห็นทุกใบงาน แต่แท็บ "รอฉันอนุมัติ" และปุ่มอนุมัติยังเป็นเฉพาะของตัวเองเสมอ</label>
+    <button class="btn">บันทึก</button>
+  </form>
+  <hr>
+  <ul class="help" style="line-height:1.8;padding-left:18px;margin:0">
+    <li><b>ลำดับการเลือก</b>: กฎของ Line นั้น → กฎ "ทุก Line" → อัตโนมัติจากบทบาท + Line ประจำ</li>
+    <li><b>Try-out</b>: ผู้แจ้งรับ Try-out ได้เสมอ; เพิ่ม Line Leader ในขั้น 3 ถ้าต้องการให้คนอื่นรับแทน</li>
+    <li>แต่ละบริษัทมีผังของตัวเอง — Superadmin สลับบริษัทที่แถบด้านบนเพื่อตั้งของบริษัทอื่น</li>
+    <li>ช่างไม่อยู่ในผัง: หัวหน้า Die เป็นผู้มอบหมายงานให้ช่างในแต่ละใบ</li>
+  </ul>
+</div>
+</div>
+{% endblock %}
